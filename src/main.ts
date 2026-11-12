@@ -218,7 +218,8 @@ async function commandTodo(args: readonly string[]): Promise<void> {
 function commandCheck(args: readonly string[]): void {
   const target = args[0];
   let folder: string;
-  if (target !== undefined && (target.includes("/") || target === ".")) folder = resolve(target);
+  // A path names the work's folder or the page in it, which is what `new` prints.
+  if (target !== undefined && (target.includes("/") || target === ".")) folder = basename(target) === "progress.md" ? dirname(resolve(target)) : resolve(target);
   else if (target !== undefined) folder = join(progressHome(), target);
   else {
     const thread = currentSession();

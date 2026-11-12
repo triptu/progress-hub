@@ -13,7 +13,11 @@ The new index answers in 62 ms on the 50,000-note vault. The mobile reader is ne
 
 ## Needs you
 
-Nothing right now.
+### Ship the new index to everyone, or behind a flag first?
+A flag means a week of keeping both indexes built and tested. My pick is everyone: the new index is faster in every case measured, and the old one stays one release back if it has to return.
+
+### Approve the larger phone download
+The shared index adds 4 MB to the phone app. Under the store's cellular limit, but it is your call before the release build.
 
 ## Shipped and in review
 

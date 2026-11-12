@@ -58,6 +58,8 @@ test("check says what the hub read and what to fix", () => {
   expect(out).toContain("Summary: Replace this line");
   progress(["new", 'Fix the "retry" button: again'], env);
   expect(progress(["check", "fix-the-retry-button-again"], env).out).toContain('Title: Fix the "retry" button: again');
+  // The page's own path, as `new` prints it, names the work too.
+  expect(progress(["check", join(home, "search-speed", "progress.md")], env).out).toContain("Title: Search speed");
   expect(progress(["check", "nope"], env).err).toContain(`no progress.md in ${join(home, "nope")}`);
 });
 

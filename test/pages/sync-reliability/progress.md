@@ -3,7 +3,7 @@ title: Sync reliability
 project: kestrel
 ---
 
-Goal: notes sync between phone and desktop without conflicts or lost edits. Fix the flaky sync tests, run the suite in random order on every PR, stop the cursor jump after a remote edit, and keep fixing failures until main stays green for a day.
+Goal: Notes sync between phone and desktop without conflicts or lost edits. Fix the flaky sync tests, run the suite in random order on every PR, stop the cursor jump after a remote edit, and keep fixing failures until main stays green for a day.
 
 Six things need you, and nine fixes have shipped. Main has been green since the 14:20 run.
 

@@ -21,7 +21,7 @@ test("the sync page reads as six asks, three decisions and nine shipped entries"
   const page = read("sync-reliability");
   expect(page.title).toBe("Sync reliability");
   expect(page.project).toBe("kestrel");
-  expect(page.goal).toStartWith("notes sync between phone and desktop");
+  expect(page.goal).toStartWith("Notes sync between phone and desktop");
   expect(page.summary).toStartWith("Six things need you");
   expect(titles(page, "needs")).toEqual([
     "Sign in to the second Codex account",
@@ -39,10 +39,9 @@ test("the sync page reads as six asks, three decisions and nine shipped entries"
   expect(page.notes).toEqual([]);
 });
 
-test("the search page has nothing waiting on the user and keeps its table as written", () => {
+test("the search page reads as two asks and keeps its table as written", () => {
   const page = read("search-speed");
-  expect(titles(page, "needs")).toEqual([]);
-  expect(page.sections.find((s) => s.kind === "needs")?.markdown).toBe("Nothing right now.");
+  expect(titles(page, "needs")).toEqual(["Ship the new index to everyone, or behind a flag first?", "Approve the larger phone download"]);
   expect(titles(page, "shipped")).toHaveLength(5);
   expect(page.sections.find((s) => s.kind === "shipped")?.items[1]?.markdown).toContain("![Search popover, before and after](images/search-popover.png)");
   expect(titles(page, "decisions")).toHaveLength(3);
@@ -53,7 +52,7 @@ test("the search page has nothing waiting on the user and keeps its table as wri
 test("a blocker written as a paragraph is one Needs you item", () => {
   const page = parsePage("---\ntitle: X\n---\n\n## Needs you (1)\n\nThe deploy key expired. Rotate it in the console.\n");
   expect(titles(page, "needs")).toEqual(["The deploy key expired. Rotate it in the console."]);
-  expect(titles(parsePage("## Needs you\n\nNone right now.\n"), "needs")).toEqual([]);
+  for (const nothing of ["None right now.", "Nothing right now."]) expect(titles(parsePage(`## Needs you\n\n${nothing}\n`), "needs")).toEqual([]);
 });
 
 test("headings inside code fences and the leading title heading are not sections", () => {
