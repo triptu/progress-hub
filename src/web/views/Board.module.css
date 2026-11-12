@@ -1,0 +1,337 @@
+.card.ghost::before,
+.card.ghost::after {
+  content: "";
+  position: absolute;
+  inset-inline-start: var(--s4);
+  height: 8px;
+  border-radius: var(--r-s);
+  background: var(--raise);
+}
+
+.card :global(.avatar-dot) {
+  border-color: var(--raise);
+}
+
+.card code {
+  background: var(--sel);
+}
+
+.board {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--board-rail);
+  gap: var(--s12);
+  align-items: start;
+}
+
+.boardMain {
+  min-width: 0;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s4);
+}
+
+/* The tile has its own column, so every line of the card starts on one edge. */
+.card {
+  display: grid;
+  grid-template-columns: var(--avatar-m) minmax(0, 1fr);
+  gap: var(--s4);
+  align-items: start;
+  padding: var(--s6);
+  border: 1px solid var(--line);
+  border-radius: var(--r-l);
+  background: var(--raise);
+}
+
+.card:hover {
+  background: color-mix(in oklab, var(--sel) 45%, var(--raise));
+}
+
+.cardMain {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+.cardTop {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+  min-width: 0;
+}
+
+/* The pill's text is smaller than the title's, so the pill centres on the title's line, not on its baseline. */
+.cardTop :global(.pill) {
+  align-self: center;
+}
+
+.cardTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font: var(--t-heading);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cardMeta {
+  overflow: hidden;
+  color: var(--muted);
+  font: var(--t-small);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* What a work is for. The word that names it is as large as what it names, and a step heavier. */
+.goalLabel {
+  margin-inline-end: var(--s2);
+  color: var(--text);
+  font-weight: var(--strong);
+}
+
+.cardGoal {
+  display: -webkit-box;
+  margin-top: var(--s3);
+  overflow: hidden;
+  color: var(--text);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.cardGoal + .cardSum {
+  margin-top: var(--s1);
+}
+
+.cardSum {
+  display: -webkit-box;
+  margin-top: var(--s3);
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.cardNeed {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  margin-top: var(--s4);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-m);
+  background: color-mix(in oklab, var(--needs) 10%, var(--raise));
+}
+
+.cardNeed svg {
+  width: 14px;
+  height: 14px;
+  margin-top: 4px;
+  color: var(--needs);
+}
+
+.cardNeed b {
+  margin-inline-end: var(--s1);
+  color: var(--needs);
+}
+
+.cardFoot {
+  margin-top: var(--s4);
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.card.ghost {
+  position: relative;
+  display: block;
+  height: 212px;
+}
+
+.card.ghost::before {
+  top: 24px;
+  width: 38%;
+  height: 10px;
+}
+
+.card.ghost::after {
+  top: 64px;
+  width: 72%;
+}
+
+/* Settled work under the board, for a screen with no sidebar. */
+.boardSettled {
+  display: none;
+  margin-top: var(--s6);
+}
+
+.miniWork {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding-block: var(--s2);
+}
+
+.boardRail {
+  display: grid;
+  gap: var(--s12);
+  /* The first block's heading sits on the screen title's baseline. */
+  padding-top: 11px;
+}
+
+.blockHead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  margin-bottom: var(--s3);
+}
+
+/* The rail stands beside the cards, so its headings are a step under theirs. */
+.blockTitle {
+  color: var(--text);
+  font-weight: var(--strong);
+}
+
+.blockHead:hover .blockTitle {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* On Home: each ongoing work's places to try, under the work's name. */
+.tryList {
+  display: grid;
+  gap: var(--s4);
+}
+
+.tryList li {
+  display: grid;
+  gap: var(--s1);
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.tryRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.blockEmpty {
+  color: var(--muted);
+}
+
+.mini {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  padding-block: var(--s3);
+}
+
+.mini:hover .miniTitle {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.miniTitle {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font: var(--t-small);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* A line in the rail can run to two lines before it is cut, so it says what shipped. */
+.mini > .miniTitle {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  line-height: 1.45;
+}
+
+.miniSub {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  min-width: 0;
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.miniWhere {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.miniSub :global(.when) {
+  margin-inline-start: auto;
+}
+
+.block li.viewed .miniTitle {
+  color: var(--muted);
+}
+
+/* The screen is too narrow for two columns: the outline becomes a strip that stays at the top. */
+@container (max-width: 1000px) {
+  /* One column: what needs the user comes before the list of work, and what shipped after it. */
+  .board {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s6);
+  }
+
+  .boardMain,
+  .boardRail {
+    display: contents;
+  }
+
+  .board :global(.view-head) {
+    order: -3;
+    margin-bottom: 0;
+  }
+
+  .block.needs {
+    order: -1;
+  }
+
+  .block.shipped {
+    order: 1;
+  }
+
+  .boardSettled {
+    order: 2;
+  }
+}
+
+@media (max-width: 760px) {
+  /* On a phone code has no ground anywhere, a card's included. */
+  .card code {
+    background: none;
+  }
+
+  .boardSettled {
+    display: block;
+  }
+
+  .cardTitle {
+    white-space: normal;
+  }
+
+  /* The tile sits beside the name only, so the lines under it get the card's whole width. */
+  .card {
+    gap: 0 var(--s3);
+    padding: var(--s4);
+  }
+
+  .card > :global(.avatar) {
+    grid-row: span 2;
+  }
+
+  .cardMain {
+    display: contents;
+  }
+
+  .cardMain > :not(.cardTop, .cardMeta) {
+    grid-column: 1 / -1;
+  }
+}

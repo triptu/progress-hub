@@ -1,0 +1,34 @@
+// Written by scripts/css-types.ts from the module beside it. Run `bun run css-types` after changing its classes.
+declare const classes: {
+  readonly agent: string;
+  readonly agentBody: string;
+  readonly agentLabel: string;
+  readonly agentMeta: string;
+  readonly agentStatus: string;
+  readonly agentTitle: string;
+  readonly agents: string;
+  readonly ago: string;
+  readonly dot: string;
+  readonly goal: string;
+  readonly goalToggle: string;
+  readonly lead: string;
+  readonly new: string;
+  readonly notes: string;
+  readonly olNew: string;
+  readonly phase: string;
+  readonly refs: string;
+  readonly sec: string;
+  readonly secDetail: string;
+  readonly secHead: string;
+  readonly secLine: string;
+  readonly secNote: string;
+  readonly stated: string;
+  readonly statedLabel: string;
+  readonly workBody: string;
+  readonly workGrid: string;
+  readonly workProject: string;
+  readonly workState: string;
+  readonly workTitle: string;
+  readonly workTry: string;
+};
+export default classes;

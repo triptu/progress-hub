@@ -1,0 +1,198 @@
+.tabs {
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  animation: edge-fade linear both;
+  animation-timeline: scroll(self inline);
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  flex: none;
+  padding-inline: var(--s4);
+  border-top: 2px solid transparent;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* "Ongoing" on Home and "All" on a work sit in the same space, each centred in it, so the tabs after it never move. */
+.tab:first-child {
+  min-width: var(--tab-first);
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+/* The strip clips what sticks out of it, so the ring is drawn inside the tab. */
+.tab:focus-visible {
+  outline-offset: -2px;
+  border-radius: 0;
+}
+
+.tab[aria-current="page"] {
+  /* Covers the bar's bottom line, so the open tab runs into the screen below it. */
+  margin-bottom: -1px;
+  background: var(--bg);
+  /* On a work, the open tab is in that work's colour. */
+  border-top-color: var(--here, var(--accent));
+  color: var(--text);
+}
+
+.tab:hover:not([aria-current="page"]) {
+  background: var(--hover);
+}
+
+/* Something waits on the user. A dot, not a number: the screen itself says how many. */
+.tabDot {
+  width: 6px;
+  height: 6px;
+  /* Beside the name without taking room, so the tabs never move when it comes or goes. */
+  margin-inline: calc(-1 * var(--s1)) calc(-1 * (6px + var(--s2) - var(--s1)));
+  border-radius: 50%;
+  background: var(--needs);
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  align-self: center;
+  /* When the bar is short of room the filter gives way first, down to a width that still reads, so every tab stays in view as long as it can. */
+  flex: 0 100000 var(--search);
+  min-width: 7rem;
+  height: var(--hit);
+  margin-inline-start: auto;
+  padding-inline: var(--s2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-m);
+  background: var(--bg);
+  color: var(--muted);
+}
+
+.search:focus-within {
+  border-color: var(--focus);
+}
+
+.search svg {
+  width: 14px;
+  height: 14px;
+}
+
+.search input::placeholder {
+  color: var(--muted);
+}
+
+/* A bare field: the box around it shows its focus. */
+.search input {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text);
+  flex: 1;
+  font: var(--t-small);
+}
+
+.search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+/* The switch between the light look and the dark one, at the bar's far end. */
+.themeSwitch {
+  align-self: center;
+  margin-inline-start: var(--s1);
+}
+
+.search:focus-within kbd {
+  visibility: hidden;
+}
+
+/* Only there when the hub can't read something it shows. */
+.trouble {
+  flex: none;
+  border-bottom: 1px solid var(--line);
+  background: var(--raise);
+  color: var(--text);
+}
+
+/* Its lines sit on the screen's edge, with the warning in the mark column like every other mark. */
+.troubleIn {
+  max-width: var(--page);
+  margin-inline: auto;
+  padding: var(--s2) var(--gutter);
+}
+
+.trouble p {
+  display: grid;
+  grid-template-columns: var(--mark) minmax(0, 1fr);
+  align-items: center;
+}
+
+/* Only the mark is orange: the hub has a fault, and nothing waits on the user. */
+.trouble svg {
+  width: 14px;
+  height: 14px;
+  margin-inline: 3px;
+  color: var(--needs);
+}
+
+@media (max-width: 760px) {
+  .tab:first-child {
+    min-width: 0;
+  }
+
+  .search {
+    order: 1;
+    flex: 1;
+    width: auto;
+    margin-inline: 0;
+  }
+
+  /* Its icon ends on the screen's edge, where the filter box used to. */
+  .themeSwitch {
+    order: 1;
+    margin-inline-end: calc(var(--gutter) - (var(--hit) - 16px) / 2);
+  }
+
+  .search kbd {
+    display: none;
+  }
+
+  .search input {
+    font-size: 16px;
+  }
+
+  .tabs {
+    order: 2;
+    flex: 0 0 100%;
+    height: var(--tabs-h);
+    border-top: 1px solid var(--line);
+  }
+
+  /* Five tabs share a phone's width, each name centred in its own. */
+  .tab {
+    flex: 1 0 auto;
+    padding-inline: var(--s2);
+  }
+}
+
+/* A strip that scrolls sideways fades at its far edge while more of it is out of view. */
+@keyframes edge-fade {
+  from {
+    mask-image: linear-gradient(to right, #000 calc(100% - var(--s8)), transparent);
+  }
+
+  99% {
+    mask-image: linear-gradient(to right, #000 calc(100% - var(--s8)), transparent);
+  }
+
+  to {
+    mask-image: none;
+  }
+}

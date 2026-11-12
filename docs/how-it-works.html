@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How the progress hub works</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: oklch(20.5% 0 none); --raise: oklch(24% 0 none); --line: oklch(32% 0 none); --text: oklch(98.5% 0 none); --body: oklch(87% 0 none); --muted: oklch(70.8% 0 none);
+    --violet: oklch(70.2% 0.183 293.541); --teal: oklch(77.7% 0.152 181.912); --blue: oklch(70.7% 0.165 254.624); --emerald: oklch(76.5% 0.177 163.223);
+    --tint: 9%; --dim: 0.28;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #fff; --raise: oklch(98.5% 0 none); --line: oklch(87% 0 none); --text: oklch(14.5% 0 none); --body: oklch(37.1% 0 none); --muted: oklch(43.9% 0 none);
+      --violet: oklch(54.1% 0.281 293.009); --teal: oklch(51.1% 0.096 186.391); --blue: oklch(54.6% 0.245 262.881); --emerald: oklch(50.8% 0.118 165.612);
+      --tint: 6%;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  [hidden] { display: none !important; }
+  body { background: var(--bg); color: var(--body); font: 400 15px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+  main { max-width: 1372px; margin: 0 auto; padding: 40px 16px 64px; }
+  h1 { color: var(--text); font: 600 22px/1.25 system-ui, sans-serif; }
+  .sub { margin-top: 4px; max-width: 46rem; color: var(--muted); text-wrap: pretty; }
+  h2 { color: var(--text); font: 600 17px/1.3 system-ui, sans-serif; }
+  code, .f { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+
+  .map { position: relative; margin-top: 32px; overflow-x: auto; }
+  svg { display: block; width: 100%; min-width: 900px; height: auto; }
+  .region rect { fill: color-mix(in oklab, var(--c) var(--tint), var(--bg)); stroke: color-mix(in oklab, var(--c) 30%, var(--bg)); }
+  .region text { fill: var(--c); font: 600 13px system-ui, sans-serif; }
+  .violet { --c: var(--violet); } .teal { --c: var(--teal); } .blue { --c: var(--blue); } .emerald { --c: var(--emerald); }
+
+  .node > rect { fill: var(--raise); stroke: var(--line); transition: stroke 120ms, opacity 120ms; }
+  .node { outline: none; transition: opacity 120ms; }
+  .node:hover > rect, .node:focus-visible > rect { stroke: var(--muted); }
+  .node .disc { fill: color-mix(in oklab, var(--c) 18%, var(--raise)); }
+  .node path { fill: var(--c); }
+  .node .t { fill: var(--text); font: 600 15px system-ui, sans-serif; }
+  .node .s { fill: var(--muted); font: 400 12px system-ui, sans-serif; }
+  .node .f { fill: var(--text); }
+  .node .rule { stroke: var(--line); }
+  [data-node="cli"], [data-node="agent"] { --c: var(--violet); }
+  [data-node="pages"], [data-node="t3"] { --c: var(--teal); }
+  [data-node="hub"], [data-node="gh"] { --c: var(--blue); }
+  [data-node="phone"], [data-node="browser"], [data-node="thread"] { --c: var(--emerald); }
+  .frow.agent circle { fill: var(--violet); } .frow.hub circle { fill: var(--blue); }
+
+  .edge path { fill: none; stroke: var(--muted); stroke-width: 1.5; transition: stroke 120ms, opacity 120ms; }
+  .edge text { fill: var(--muted); font: 500 11px system-ui, sans-serif; paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+  #arrow path { fill: context-stroke; }
+
+  /* Walking a flow: what the step touches stays lit, and the rest steps back. */
+  .walking .node, .walking .edge { opacity: var(--dim); }
+  .walking .node.lit, .walking .edge.lit { opacity: 1; }
+  .walking .edge.lit path { stroke: var(--text); stroke-width: 2.25; stroke-dasharray: 6 5; animation: flow 600ms linear infinite; }
+  .walking .edge.lit text { fill: var(--text); }
+  .walking .node.lit > rect { stroke: var(--c); stroke-width: 1.5; }
+  @keyframes flow { to { stroke-dashoffset: -11; } }
+  @media (prefers-reduced-motion: reduce) { .walking .edge.lit path { animation: none; } }
+
+  .tip { position: absolute; z-index: 2; width: 260px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--raise); box-shadow: 0 8px 24px rgb(0 0 0 / 0.25); pointer-events: none; }
+  .tip[hidden] { display: none; }
+  .tip b { display: block; color: var(--text); font-weight: 600; }
+  .tip p + p { margin-top: 6px; color: var(--muted); }
+
+  .below { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 48px; margin-top: 40px; }
+  .flows { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  button { border: 0; font: inherit; color: inherit; background: none; cursor: default; }
+  .flow { min-height: 32px; padding: 0 12px; border-radius: 8px; background: var(--raise); color: var(--text); font-weight: 500; box-shadow: inset 0 0 0 1px var(--line); }
+  .flow:hover { box-shadow: inset 0 0 0 1px var(--muted); }
+  .flow[aria-pressed="true"] { background: var(--text); color: var(--bg); box-shadow: none; }
+  .steps { margin-top: 16px; padding: 0; list-style: none; counter-reset: step; }
+  .steps li { counter-increment: step; }
+  .step { display: grid; grid-template-columns: 28px minmax(0, 1fr); width: 100%; padding: 8px 12px 8px 8px; border-radius: 8px; text-align: start; color: var(--muted); }
+  .step::before { content: counter(step); display: grid; place-items: center; width: 20px; height: 20px; margin-top: 2px; border-radius: 50%; background: var(--line); color: var(--text); font: 600 11px system-ui, sans-serif; }
+  .step:hover { color: var(--text); }
+  .step[aria-current="step"] { background: var(--raise); color: var(--text); }
+  .step[aria-current="step"]::before { background: var(--text); color: var(--bg); }
+  .hint { margin-top: 16px; color: var(--muted); }
+  .nav { display: flex; gap: 8px; margin: 12px 0 0 36px; }
+  .nav button { min-height: 32px; padding: 0 12px; border-radius: 8px; background: var(--raise); color: var(--text); font-weight: 500; }
+  .nav button:disabled { opacity: 0.4; }
+
+  .facts { display: grid; gap: 20px; align-content: start; }
+  .facts dt { color: var(--text); font-weight: 600; }
+  .facts dd { color: var(--body); }
+  .facts dd + dt { margin-top: 16px; }
+  :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  @media (max-width: 760px) { .below { grid-template-columns: minmax(0, 1fr); gap: 32px; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>How the progress hub works</h1>
+    <p class="sub">Agents write plain Markdown pages. One small program on this Mac reads those pages and T3, and serves the app you open. It all runs on this Mac.</p>
+  </header>
+
+  <div class="map">
+    <svg viewBox="0 0 1340 470" role="img" aria-label="Agents write pages into the progress home. The hub reads the pages and T3's database, and serves the app to this Mac's browser and, over Tailscale, to a phone.">
+      <defs><marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z"/></marker></defs>
+      <g class="region violet"><rect x="0" y="0" width="230" height="470" rx="14"/><text x="16" y="28">Agents write</text></g>
+<g class="region teal"><rect x="300" y="0" width="360" height="470" rx="14"/><text x="316" y="28">Files on this Mac</text></g>
+<g class="region blue"><rect x="730" y="0" width="260" height="470" rx="14"/><text x="746" y="28">The hub reads and serves</text></g>
+<g class="region emerald"><rect x="1060" y="0" width="280" height="470" rx="14"/><text x="1076" y="28">You read</text></g>
+<g class="edge" data-edge="uses"><path d="M115 236 L115 137" marker-end="url(#arrow)"/><text x="125" y="190" text-anchor="start">runs</text></g>
+<g class="edge" data-edge="cli"><path d="M214 90 L307 90" marker-end="url(#arrow)"/><text x="261" y="80" text-anchor="middle">creates</text></g>
+<g class="edge" data-edge="write"><path d="M214 262 C262 262 262 152 307 152" marker-end="url(#arrow)"/><text x="261" y="211" text-anchor="middle">writes</text></g>
+<g class="edge" data-edge="run"><path d="M214 288 C262 288 262 408 307 408" marker-end="url(#arrow)"/><text x="261" y="352" text-anchor="middle">runs in</text></g>
+<g class="edge" data-edge="read"><path d="M644 150 L737 150" marker-end="url(#arrow)"/><text x="691" y="140" text-anchor="middle">reads</text></g>
+<g class="edge" data-edge="save"><path d="M746 200 C700 200 700 258 653 258" marker-end="url(#arrow)"/><text x="699" y="252" text-anchor="middle">saves</text></g>
+<g class="edge" data-edge="t3"><path d="M644 408 C720 408 770 330 770 229" marker-end="url(#arrow)"/><text x="690" y="426" text-anchor="middle">reads</text></g>
+<g class="edge" data-edge="gh"><path d="M900 220 L900 361" marker-end="url(#arrow)"/><text x="890" y="296" text-anchor="end">asks for titles</text></g>
+<g class="edge" data-edge="phone"><path d="M974 124 C1020 124 1020 100 1067 100" marker-end="url(#arrow)"/><text x="1020" y="98" text-anchor="middle">serves</text></g>
+<g class="edge" data-edge="serve"><path d="M974 180 L1067 180" marker-end="url(#arrow)"/><text x="1020" y="170" text-anchor="middle">serves</text></g>
+<g class="edge" data-edge="mark"><path d="M1076 208 L983 208" marker-end="url(#arrow)"/><text x="1029" y="226" text-anchor="middle">marks</text></g>
+<g class="edge" data-edge="answer"><path d="M1200 236 L1200 361" marker-end="url(#arrow)"/><text x="1190" y="302" text-anchor="end">Answer in thread</text></g>
+<g class="node" data-node="pages" tabindex="0" data-what="A folder that outlives scratch space: one folder per piece of work." data-why="Plain files. An agent edits Markdown and the hub does the rest." data-title="Progress home"><title>A folder that outlives scratch space: one folder per piece of work. Plain files. An agent edits Markdown and the hub does the rest.</title><rect x="316" y="52" width="328" height="290" rx="10"/><g transform="translate(330,68)"><circle cx="18" cy="18" r="18" class="disc"/><path transform="translate(7,7) scale(0.0859)" d="M245,110.64A16,16,0,0,0,232,104H216V88a16,16,0,0,0-16-16H130.67L102.94,51.2a16.14,16.14,0,0,0-9.6-3.2H40A16,16,0,0,0,24,64V208h0a8,8,0,0,0,8,8H211.1a8,8,0,0,0,7.59-5.47l28.49-85.47A16.05,16.05,0,0,0,245,110.64ZM93.34,64,123.2,86.4A8,8,0,0,0,128,88h72v16H69.77a16,16,0,0,0-15.18,10.94L40,158.7V64Zm112,136H43.1l26.67-80H232Z"/></g><text class="t" x="378" y="83">Progress home</text><text class="s" x="378" y="103">one folder per piece of work</text><line class="rule" x1="330" y1="126" x2="630" y2="126"/><g class="frow agent"><circle cx="340" cy="152" r="4"/><text class="f" x="354" y="156">progress.md</text><text class="s" x="468" y="156">the page</text></g><g class="frow agent"><circle cx="340" cy="186" r="4"/><text class="f" x="354" y="190">images/</text><text class="s" x="468" y="190">what the page shows</text></g><g class="frow agent"><circle cx="340" cy="220" r="4"/><text class="f" x="354" y="224">.sessions</text><text class="s" x="468" y="224">its agent sessions</text></g><g class="frow hub"><circle cx="340" cy="254" r="4"/><text class="f" x="354" y="258">.history.jsonl</text><text class="s" x="468" y="258">what changed, and when</text></g><g class="frow hub"><circle cx="340" cy="288" r="4"/><text class="f" x="354" y="292">.marks.json</text><text class="s" x="468" y="292">what you viewed</text></g><line class="rule" x1="330" y1="304" x2="630" y2="304"/><g class="frow agent"><circle cx="340" cy="324" r="4"/><text class="s" x="352" y="328">an agent writes</text></g><g class="frow hub"><circle cx="466" cy="324" r="4"/><text class="s" x="478" y="328">the hub writes</text></g></g>
+<g class="node" data-node="cli" tabindex="0" data-what="A small command line tool." data-why="An agent starts a page with one command, so every page has the same shape." data-title="progress CLI"><title>A small command line tool. An agent starts a page with one command, so every page has the same shape.</title><rect x="16" y="52" width="198" height="76" rx="10"/><g transform="translate(30,68)"><circle cx="18" cy="18" r="18" class="disc"/><path transform="translate(7,7) scale(0.0859)" d="M117.31,134l-72,64a8,8,0,1,1-10.63-12L100,128,34.69,70A8,8,0,1,1,45.32,58l72,64a8,8,0,0,1,0,12ZM216,184H120a8,8,0,0,0,0,16h96a8,8,0,0,0,0-16Z"/></g><text class="t" x="78" y="83">progress CLI</text><text class="s" x="78" y="103">new · join · check</text></g>
+<g class="node" data-node="agent" tabindex="0" data-what="Claude and Codex agents doing the work, each in a T3 thread." data-why="They write the page. Nothing else does." data-title="Agents"><title>Claude and Codex agents doing the work, each in a T3 thread. They write the page. Nothing else does.</title><rect x="16" y="236" width="198" height="76" rx="10"/><g transform="translate(30,252)"><circle cx="18" cy="18" r="18" class="disc"/><path transform="translate(7,7) scale(0.0859)" d="M200,48H136V16a8,8,0,0,0-16,0V48H56A32,32,0,0,0,24,80V192a32,32,0,0,0,32,32H200a32,32,0,0,0,32-32V80A32,32,0,0,0,200,48Zm16,144a16,16,0,0,1-16,16H56a16,16,0,0,1-16-16V80A16,16,0,0,1,56,64H200a16,16,0,0,1,16,16Zm-52-56H92a28,28,0,0,0,0,56h72a28,28,0,0,0,0-56Zm-24,16v24H116V152ZM80,164a12,12,0,0,1,12-12h8v24H92A12,12,0,0,1,80,164Zm84,12h-8V152h8a12,12,0,0,1,0,24ZM72,108a12,12,0,1,1,12,12A12,12,0,0,1,72,108Zm88,0a12,12,0,1,1,12,12A12,12,0,0,1,160,108Z"/></g><text class="t" x="78" y="267">Agents</text><text class="s" x="78" y="287">in T3 threads</text></g>
+<g class="node" data-node="t3" tabindex="0" data-what="T3&#x27;s own record of threads, agents, pull requests and pending questions." data-why="The hub reads it, so agents never type statuses or timestamps." data-title="T3&#x27;s database"><title>T3&#x27;s own record of threads, agents, pull requests and pending questions. The hub reads it, so agents never type statuses or timestamps.</title><rect x="316" y="370" width="328" height="76" rx="10"/><g transform="translate(330,386)"><circle cx="18" cy="18" r="18" class="disc"/><path transform="translate(7,7) scale(0.0859)" d="M128,24C74.17,24,32,48.6,32,80v96c0,31.4,42.17,56,96,56s96-24.6,96-56V80C224,48.6,181.83,24,128,24Zm80,104c0,9.62-7.88,19.43-21.61,26.92C170.93,163.35,150.19,168,128,168s-42.93-4.65-58.39-13.08C55.88,147.43,48,137.62,48,128V111.36c17.06,15,46.23,24.64,80,24.64s62.94-9.68,80-24.64ZM69.61,53.08C85.07,44.65,105.81,40,128,40s42.93,4.65,58.39,13.08C200.12,60.57,208,70.38,208,80s-7.88,19.43-21.61,26.92C170.93,115.35,150.19,120,128,120s-42.93-4.65-58.39-13.08C55.88,99.43,48,89.62,48,80S55.88,60.57,69.61,53.08ZM186.39,202.92C170.93,211.35,150.19,216,128,216s-42.93-4.65-58.39-13.08C55.88,195.43,48,185.62,48,176V159.36c17.06,15,46.23,24.64,80,24.64s62.94-9.68,80-24.64V176C208,185.62,200.12,195.43,186.39,202.92Z"/></g><text class="t" x="378" y="401">T3&#x27;s database</text><text class="s" x="378" y="421">~/.t3/userdata/statev2.sqlite</text></g>
+<g class="node" data-node="hub" tabindex="0" data-what="One small program that starts when you log in." data-why="It turns files and T3 into the app." data-title="The hub"><title>One small program that starts when you log in. It turns files and T3 into the app.</title><rect x="746" y="96" width="228" height="124" rx="10"/><g transform="translate(760,112)"><circle cx="18" cy="18" r="18" class="disc"/><path transform="translate(7,7) scale(0.0859)" d="M128,88a40,40,0,1,0,40,40A40,40,0,0,0,128,88Zm0,64a24,24,0,1,1,24-24A24,24,0,0,1,128,152Zm73.71,7.14a80,80,0,0,1-14.08,22.2,8,8,0,0,1-11.92-10.67,63.95,63.95,0,0,0,0-85.33,8,8,0,1,1,11.92-10.67,80.08,80.08,0,0,1,14.08,84.47ZM69,103.09a64,64,0,0,0,11.26,67.58,8,8,0,0,1-11.92,10.67,79.93,79.93,0,0,1,0-106.67A8,8,0,1,1,80.29,85.34,63.77,63.77,0,0,0,69,103.09ZM248,128a119.58,119.58,0,0,1-34.29,84,8,8,0,1,1-11.42-11.2,103.9,103.9,0,0,0,0-145.56A8,8,0,1,1,213.71,44,119.58,119.58,0,0,1,248,128ZM53.71,200.78A8,8,0,1,1,42.29,212a119.87,119.87,0,0,1,0-168,8,8,0,1,1,11.42,11.2,103.9,103.9,0,0,0,0,145.56Z"/></g><text class="t" x="808" y="127">The hub</text><text class="s" x="808" y="147">one process, port 4747</text><text class="s" x="762" y="180">Looks every 2 seconds.</text><text class="s" x="762" y="200">Tells the app when things change.</text></g>
+<g class="node" data-node="gh" tabindex="0" data-what="Titles and states of pull requests and commits." data-why="So a link in a page shows as a named chip." data-title="GitHub"><title>Titles and states of pull requests and commits. So a link in a page shows as a named chip.</title><rect x="746" y="370" width="228" height="76" rx="10"/><g transform="translate(760,386)"><circle cx="18" cy="18" r="18" class="disc"/><path transform="translate(7,7) scale(0.0859)" d="M208.31,75.68A59.78,59.78,0,0,0,202.93,28,8,8,0,0,0,196,24a59.75,59.75,0,0,0-48,24H124A59.75,59.75,0,0,0,76,24a8,8,0,0,0-6.93,4,59.78,59.78,0,0,0-5.38,47.68A58.14,58.14,0,0,0,56,104v8a56.06,56.06,0,0,0,48.44,55.47A39.8,39.8,0,0,0,96,192v8H72a24,24,0,0,1-24-24A40,40,0,0,0,8,136a8,8,0,0,0,0,16,24,24,0,0,1,24,24,40,40,0,0,0,40,40H96v16a8,8,0,0,0,16,0V192a24,24,0,0,1,48,0v40a8,8,0,0,0,16,0V192a39.8,39.8,0,0,0-8.44-24.53A56.06,56.06,0,0,0,216,112v-8A58.14,58.14,0,0,0,208.31,75.68ZM200,112a40,40,0,0,1-40,40H112a40,40,0,0,1-40-40v-8a41.74,41.74,0,0,1,6.9-22.48A8,8,0,0,0,80,73.83a43.81,43.81,0,0,1,.79-33.58,43.88,43.88,0,0,1,32.32,20.06A8,8,0,0,0,119.82,64h32.35a8,8,0,0,0,6.74-3.69,43.87,43.87,0,0,1,32.32-20.06A43.81,43.81,0,0,1,192,73.83a8.09,8.09,0,0,0,1,7.65A41.72,41.72,0,0,1,200,104Z"/></g><text class="t" x="808" y="401">GitHub</text><text class="s" x="808" y="421">through gh</text></g>
+<g class="node" data-node="phone" tabindex="0" data-what="The same app, through your tailnet." data-why="Tailscale forwards port 4747 to this Mac. No account, no cloud." data-title="Phone, other devices"><title>The same app, through your tailnet. Tailscale forwards port 4747 to this Mac. No account, no cloud.</title><rect x="1076" y="52" width="248" height="76" rx="10"/><g transform="translate(1090,68)"><circle cx="18" cy="18" r="18" class="disc"/><path transform="translate(7,7) scale(0.0859)" d="M176,16H80A24,24,0,0,0,56,40V216a24,24,0,0,0,24,24h96a24,24,0,0,0,24-24V40A24,24,0,0,0,176,16ZM72,64H184V192H72Zm8-32h96a8,8,0,0,1,8,8v8H72V40A8,8,0,0,1,80,32Zm96,192H80a8,8,0,0,1-8-8v-8H184v8A8,8,0,0,1,176,224Z"/></g><text class="t" x="1138" y="83">Phone, other devices</text><text class="s" x="1138" y="103">over Tailscale</text></g>
+<g class="node" data-node="browser" tabindex="0" data-what="The app: Home, each work, and the tabs." data-why="It fetches the hub&#x27;s state, and fetches again when the hub says something changed." data-title="Browser on this Mac"><title>The app: Home, each work, and the tabs. It fetches the hub&#x27;s state, and fetches again when the hub says something changed.</title><rect x="1076" y="160" width="248" height="76" rx="10"/><g transform="translate(1090,176)"><circle cx="18" cy="18" r="18" class="disc"/><path transform="translate(7,7) scale(0.0859)" d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,16V88H40V56Zm0,144H40V104H216v96Z"/></g><text class="t" x="1138" y="191">Browser on this Mac</text><text class="s" x="1138" y="211">http://127.0.0.1:4747</text></g>
+<g class="node" data-node="thread" tabindex="0" data-what="The agent&#x27;s own chat in T3." data-why="The hub only reads. You reply where the agent is." data-title="T3 thread"><title>The agent&#x27;s own chat in T3. The hub only reads. You reply where the agent is.</title><rect x="1076" y="370" width="248" height="76" rx="10"/><g transform="translate(1090,386)"><circle cx="18" cy="18" r="18" class="disc"/><path transform="translate(7,7) scale(0.0859)" d="M140,128a12,12,0,1,1-12-12A12,12,0,0,1,140,128ZM84,116a12,12,0,1,0,12,12A12,12,0,0,0,84,116Zm88,0a12,12,0,1,0,12,12A12,12,0,0,0,172,116Zm60,12A104,104,0,0,1,79.12,219.82L45.07,231.17a16,16,0,0,1-20.24-20.24l11.35-34.05A104,104,0,1,1,232,128Zm-16,0A88,88,0,1,0,51.81,172.06a8,8,0,0,1,.66,6.54L40,216,77.4,203.53a7.85,7.85,0,0,1,2.53-.42,8,8,0,0,1,4,1.08A88,88,0,0,0,216,128Z"/></g><text class="t" x="1138" y="401">T3 thread</text><text class="s" x="1138" y="421">where you answer an agent</text></g>
+    </svg>
+    <div class="tip" hidden></div>
+  </div>
+
+  <div class="below">
+    <section>
+      <h2>Walk through it</h2>
+      <div class="flows"></div>
+      <p class="hint">Pick one to see its path light up, step by step.</p>
+      <ol class="steps"></ol>
+      <div class="nav" hidden><button type="button" data-go="-1">Back</button><button type="button" data-go="1">Next</button></div>
+    </section>
+    <dl class="facts">
+      <div>
+        <dt>The hub reads</dt>
+        <dd>The pages, every 2 seconds. T3's database, read-only. GitHub, through <code>gh</code>.</dd>
+        <dt>The hub writes</dt>
+        <dd>Files of its own: <code>.history.jsonl</code> in each work, and your marks and todos in <code>.marks.json</code> and <code>.todos.json</code>. It never edits a page.</dd>
+        <dt>It runs as</dt>
+        <dd>A login service, <code>progress.hub</code>, running <code>~/.local/bin/progress serve</code>. <code>setup.sh</code> installs it.</dd>
+        <dt>It answers</dt>
+        <dd>Only this Mac and its tailnet name, on port 4747.</dd>
+      </div>
+    </dl>
+  </div>
+</main>
+<script>
+  const FLOWS = [{"id": "ship", "name": "An agent ships something", "steps": [{"text": "The agent adds a line under Shipped in its page.", "nodes": ["agent", "pages"], "edges": ["write"]}, {"text": "Within 2 seconds the hub sees that the file changed.", "nodes": ["pages", "hub"], "edges": ["read"]}, {"text": "It writes what changed, and when, into the work's history.", "nodes": ["hub", "pages"], "edges": ["save"]}, {"text": "It asks GitHub for the pull request's title.", "nodes": ["hub", "gh"], "edges": ["gh"]}, {"text": "It tells every open app that something changed. Each app fetches the new state.", "nodes": ["hub", "browser", "phone"], "edges": ["serve", "phone"]}]}, {"id": "needs", "name": "An agent needs you", "steps": [{"text": "An agent stops on a question or a permission prompt, and T3 records it. Or it writes an ask under Needs you in its page.", "nodes": ["agent", "t3", "pages"], "edges": ["run", "write"]}, {"text": "The hub reads both.", "nodes": ["t3", "pages", "hub"], "edges": ["t3", "read"]}, {"text": "Needs you shows the ask, on Home and on the work.", "nodes": ["hub", "browser"], "edges": ["serve"]}, {"text": "\u201cAnswer in thread\u201d opens the agent's thread in T3. You reply there.", "nodes": ["browser", "thread"], "edges": ["answer"]}]}, {"id": "viewed", "name": "You mark a line viewed", "steps": [{"text": "You click the ring on a shipped line.", "nodes": ["browser", "hub"], "edges": ["mark"]}, {"text": "The hub saves it in .marks.json, beside the pages.", "nodes": ["hub", "pages"], "edges": ["save"]}, {"text": "Every device shows it, because the marks live with the hub and not in a browser.", "nodes": ["hub", "browser", "phone"], "edges": ["serve", "phone"]}]}, {"id": "start", "name": "An agent starts work", "steps": [{"text": "The agent runs progress new \"<title>\".", "nodes": ["agent", "cli"], "edges": ["uses"]}, {"text": "The command makes the work's folder with a starter page, and notes the agent's session in .sessions.", "nodes": ["cli", "pages"], "edges": ["cli"]}, {"text": "The agent keeps the page current as it works.", "nodes": ["agent", "pages"], "edges": ["write"]}, {"text": "The hub finds the new folder, and the work shows up in the sidebar.", "nodes": ["pages", "hub", "browser"], "edges": ["read", "serve"]}]}, {"id": "phone", "name": "You open it on your phone", "steps": [{"text": "Tailscale forwards port 4747 from your tailnet to the hub on this Mac.", "nodes": ["phone", "hub"], "edges": ["phone"]}, {"text": "The hub answers only this Mac and its tailnet name. Anything else is refused.", "nodes": ["hub"], "edges": []}, {"text": "Same app, same data, same marks.", "nodes": ["hub", "phone", "pages"], "edges": ["phone", "read"]}]}];
+  const svg = document.querySelector("svg"), tip = document.querySelector(".tip"), map = document.querySelector(".map");
+  const flowsBox = document.querySelector(".flows"), stepsBox = document.querySelector(".steps"), hint = document.querySelector(".hint"), nav = document.querySelector(".nav");
+  let flow = null, at = 0;
+
+  function draw() {
+    for (const button of flowsBox.children) button.setAttribute("aria-pressed", String(button.dataset.flow === flow?.id));
+    svg.classList.toggle("walking", flow !== null);
+    for (const el of svg.querySelectorAll(".lit")) el.classList.remove("lit");
+    hint.hidden = flow !== null; nav.hidden = flow === null;
+    stepsBox.replaceChildren();
+    if (!flow) return;
+    flow.steps.forEach((step, index) => {
+      const li = document.createElement("li"), button = document.createElement("button");
+      button.type = "button"; button.className = "step"; button.textContent = step.text;
+      const text = document.createElement("span"); text.textContent = step.text; button.replaceChildren(text);
+      if (index === at) button.setAttribute("aria-current", "step");
+      button.addEventListener("click", () => { at = index; draw(); });
+      li.append(button); stepsBox.append(li);
+    });
+    const step = flow.steps[at];
+    for (const id of step.nodes) svg.querySelector(`[data-node="${id}"]`)?.classList.add("lit");
+    for (const id of step.edges) svg.querySelector(`[data-edge="${id}"]`)?.classList.add("lit");
+    // On a narrow screen the picture scrolls sideways: bring what the step touches into view.
+    const lit = [...svg.querySelectorAll(".node.lit")].map((el) => el.getBoundingClientRect());
+    if (lit.length && map.scrollWidth > map.clientWidth) {
+      const frame = map.getBoundingClientRect(), left = Math.min(...lit.map((box) => box.left)), right = Math.max(...lit.map((box) => box.right));
+      map.scrollTo({ left: map.scrollLeft + (left + right) / 2 - frame.left - frame.width / 2, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    }
+    nav.querySelector('[data-go="-1"]').disabled = at === 0;
+    nav.querySelector('[data-go="1"]').disabled = at === flow.steps.length - 1;
+  }
+
+  for (const item of FLOWS) {
+    const button = document.createElement("button");
+    button.type = "button"; button.className = "flow"; button.dataset.flow = item.id; button.textContent = item.name;
+    button.addEventListener("click", () => { flow = flow?.id === item.id ? null : item; at = 0; draw(); });
+    flowsBox.append(button);
+  }
+  nav.addEventListener("click", (event) => {
+    const go = Number(event.target.dataset?.go ?? 0);
+    if (flow && go) { at = Math.max(0, Math.min(flow.steps.length - 1, at + go)); draw(); }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (!flow) return;
+    if (event.key === "ArrowRight") { at = Math.min(flow.steps.length - 1, at + 1); draw(); }
+    if (event.key === "ArrowLeft") { at = Math.max(0, at - 1); draw(); }
+    if (event.key === "Escape") { flow = null; draw(); }
+  });
+
+  // What a block is and why it is there, beside the block.
+  function show(node) {
+    const { title, what, why } = node.dataset;
+    tip.replaceChildren(Object.assign(document.createElement("b"), { textContent: title }), Object.assign(document.createElement("p"), { textContent: what }), Object.assign(document.createElement("p"), { textContent: why }));
+    tip.hidden = false;
+    const box = node.querySelector("rect").getBoundingClientRect(), frame = map.getBoundingClientRect();
+    const left = Math.min(Math.max(8, box.left - frame.left + map.scrollLeft), map.scrollWidth - tip.offsetWidth - 8);
+    const below = box.bottom - frame.top + 8;
+    tip.style.left = `${left}px`;
+    tip.style.top = `${below + tip.offsetHeight > map.offsetHeight ? box.top - frame.top - tip.offsetHeight - 8 : below}px`;
+  }
+  for (const node of svg.querySelectorAll(".node")) {
+    node.querySelector("title")?.remove();
+    node.addEventListener("pointerenter", () => show(node));
+    node.addEventListener("focus", () => show(node));
+    node.addEventListener("pointerleave", () => { tip.hidden = true; });
+    node.addEventListener("blur", () => { tip.hidden = true; });
+  }
+
+  // #ship-2 opens a flow at a step, for a link or a screenshot.
+  const [id, step] = location.hash.slice(1).split("-");
+  flow = FLOWS.find((item) => item.id === id) ?? null;
+  at = flow ? Math.max(0, Math.min(flow.steps.length - 1, Number(step || 1) - 1)) : 0;
+  draw();
+</script>
+</body>
+</html>

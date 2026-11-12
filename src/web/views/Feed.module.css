@@ -1,0 +1,11 @@
+:global(.icon-btn):global(.tool).starTool[aria-pressed="true"] {
+  color: var(--star);
+}
+
+/* A work's name runs to a second line here before it is cut. */
+.rail :global(.ol-name) {
+  display: -webkit-box;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}

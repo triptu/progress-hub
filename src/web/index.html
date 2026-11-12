@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <title>Progress</title>
+    <script>
+      // The look this browser picked, or the system's. Set before the styles apply, so the page never opens in the wrong one. lib/theme.ts keeps it current.
+      try {
+        const picked = localStorage.getItem("progress:theme");
+        document.documentElement.dataset.theme = picked === "light" || picked === "dark" ? picked : matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      } catch {}
+    </script>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23171717'/%3E%3Crect x='7' y='8' width='18' height='4' rx='1' fill='%23ff8904'/%3E%3Crect x='7' y='14' width='12' height='4' rx='1' fill='%2351a2ff'/%3E%3Crect x='7' y='20' width='6' height='4' rx='1' fill='%2300d492'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./tokens.css" />
+    <link rel="stylesheet" href="./app.css" />
+  </head>
+  <body>
+    <div id="root"><div class="app"><aside class="side"></aside><div class="main"><header class="topbar"></header></div></div></div>
+    <script>
+      // The frame above shows until the app has its data. It takes the sidebar width the user set, so nothing moves when the app takes over.
+      try {
+        const width = JSON.parse(localStorage.getItem("progress:side-width") ?? "null");
+        if (typeof width === "number" && width >= 240 && width <= 480) document.documentElement.style.setProperty("--side-w", `${width}px`);
+      } catch {}
+    </script>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

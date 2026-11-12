@@ -1,0 +1,5 @@
+/* What every view shares. A view's own styles are in its module, beside it. The order is the cascade's: a later file wins a tie. */
+@import "./css/base.css";
+@import "./css/frame.css";
+@import "./css/ui.css";
+@import "./css/prose.css";

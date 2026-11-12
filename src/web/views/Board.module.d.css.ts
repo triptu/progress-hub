@@ -1,0 +1,34 @@
+// Written by scripts/css-types.ts from the module beside it. Run `bun run css-types` after changing its classes.
+declare const classes: {
+  readonly block: string;
+  readonly blockEmpty: string;
+  readonly blockHead: string;
+  readonly blockTitle: string;
+  readonly board: string;
+  readonly boardMain: string;
+  readonly boardRail: string;
+  readonly boardSettled: string;
+  readonly card: string;
+  readonly cardFoot: string;
+  readonly cardGoal: string;
+  readonly cardMain: string;
+  readonly cardMeta: string;
+  readonly cardNeed: string;
+  readonly cardSum: string;
+  readonly cardTitle: string;
+  readonly cardTop: string;
+  readonly cards: string;
+  readonly ghost: string;
+  readonly goalLabel: string;
+  readonly mini: string;
+  readonly miniSub: string;
+  readonly miniTitle: string;
+  readonly miniWhere: string;
+  readonly miniWork: string;
+  readonly needs: string;
+  readonly shipped: string;
+  readonly tryList: string;
+  readonly tryRow: string;
+  readonly viewed: string;
+};
+export default classes;

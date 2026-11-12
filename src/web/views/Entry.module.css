@@ -1,0 +1,331 @@
+.stamp {
+  flex: none;
+  color: var(--muted);
+  font: var(--t-small);
+  white-space: nowrap;
+}
+
+/* On Home a row is in its work's colour: the name, the dot and the rail down to the next row. */
+.tl.from :global(.tl-from) {
+  color: color-mix(in oklab, var(--proj) 70%, var(--text));
+}
+
+/* Written to outrank the colour a dot takes from its kind: on Home the colour says whose line it is. */
+:global(.timeline) .tl.from .tlDot {
+  --dot: var(--proj);
+}
+
+:global(.timeline) .tl.from::before {
+  background: color-mix(in oklab, var(--proj) 35%, var(--line));
+}
+
+.tl.from :global(.tl-from):hover {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.tl.from .tlBody,
+.tl.from .stamp {
+  align-self: start;
+}
+
+.tl.from .stamp {
+  line-height: 1.5rem;
+}
+
+/*
+ * A mark row: a dot on a rail in a column at the screen's edge that says what kind of change it was, the change
+ * starting after it, and its time ending on the right edge. Each change has room of its own: the gap between
+ * two is three times the gap inside one.
+ */
+.tl {
+  display: grid;
+  position: relative;
+  /* A fourth column with no width, at the text's right edge: the viewed mark hangs from it into the right margin. */
+  grid-template-columns: var(--mark) minmax(0, 1fr) auto 0;
+  column-gap: 0;
+  align-items: start;
+  /* The room over and under a row. Rows stand well apart, and what belongs to a row sits close under its line. */
+  --pad: var(--s4);
+  --pad-top: var(--pad);
+  padding-block: var(--pad-top) var(--pad);
+}
+
+.tl::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  inset-inline-start: calc(var(--avatar-xs) / 2);
+  width: 1px;
+  background: var(--line);
+}
+
+/* The first entry sits close under what heads its list. */
+.tl:first-child {
+  --pad-top: var(--s1);
+}
+
+.tl:last-child {
+  padding-bottom: var(--s1);
+}
+
+/* The rail runs from the first dot to the last: a dot's centre is 12px under its row's top padding. */
+.tl:first-child::before {
+  top: calc(var(--pad-top) + var(--s3));
+}
+
+/* One entry has nothing to be joined to. */
+.tl:only-child::before {
+  display: none;
+}
+
+.tl:last-child::before {
+  bottom: calc(100% - var(--pad-top) - var(--s3));
+}
+
+.tlDot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  /* Centred under the work's tile, which is the same width as this box. */
+  margin: 8px calc((var(--avatar-xs) - 8px) / 2) 0;
+  border-radius: 50%;
+  /* A kind of change, or the work a row is from, names the dot's colour; a row that was looked at dims it. */
+  --dot: var(--faint);
+  background: var(--dot);
+  /* A ring of the ground, so the rail stops short of the dot. */
+  box-shadow: 0 0 0 3px var(--bg);
+}
+
+/* The time sits on the baseline of the line's first row of text, boxed or not. */
+.tlBody,
+.tl .stamp {
+  align-self: first baseline;
+}
+
+.tl .stamp {
+  min-width: 2.5em;
+  margin-inline-start: var(--s4);
+  text-align: end;
+}
+
+/* The line above shows the same time. It keeps its place, so the text column never changes width. */
+.stamp.same {
+  visibility: hidden;
+}
+
+/*
+ * The viewed mark of something that shipped: a ring to click once it has been looked at. It hangs in the
+ * right margin as the dot hangs in the left, centred on the row's first line, so times keep their one edge.
+ */
+.tlView {
+  display: grid;
+  place-items: center;
+  grid-column: 4;
+  width: var(--hit);
+  height: var(--hit);
+  margin-block: calc((1.5rem - var(--hit)) / 2);
+  margin-inline-start: -2px;
+  border-radius: 50%;
+  color: var(--faint);
+}
+
+/* The ring a row is ticked with: the viewed mark on what shipped, and a todo's circle. */
+.tlView svg {
+  width: 18px;
+  height: 18px;
+}
+
+.tlView:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.tlView[aria-pressed="true"] {
+  color: var(--muted);
+}
+
+/* New since the last visit: a bar at the far left, as an editor marks a changed line. */
+.tl.fresh::after {
+  content: "";
+  position: absolute;
+  top: var(--s3);
+  bottom: var(--s3);
+  inset-inline-start: calc(-1 * var(--s3));
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+/* What the page wrote under the line. */
+.tlMore {
+  margin-top: var(--s2);
+  color: var(--muted);
+}
+
+/* A decision is a record to look things up in: a quieter dot than something that shipped. */
+.tl[data-kind="decided"] .tlDot {
+  width: 6px;
+  height: 6px;
+  margin: 9px calc((var(--avatar-xs) - 6px) / 2) 0;
+}
+
+/* A line reads as one thing, in one colour and one weight. A star marks the ones a page called important. */
+.tlLine {
+  color: var(--text);
+}
+
+.tlText > a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Code in a line keeps its own weight. */
+.tlLine code {
+  font-weight: 400;
+}
+
+/* A decision is a record to look things up in, so it reads a step quieter than what shipped. */
+.tl[data-kind="decided"] .tlLine {
+  color: var(--text);
+}
+
+/* The kind of change in words, since a dot's colour alone must not carry it. */
+.tone {
+  margin-inline-end: var(--s2);
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.tl[data-kind="needs"] .tlDot {
+  --dot: var(--needs);
+}
+
+.tl[data-kind="needs"] .tone {
+  color: var(--needs);
+}
+
+.tl[data-kind="shipped"] .tlDot {
+  --dot: var(--working);
+}
+
+/* Under way: the accent. Planned: a ring, not yet filled. */
+.tl[data-kind="doing"] .tlDot {
+  --dot: var(--accent);
+}
+
+.tl[data-kind="next"] .tlDot {
+  background: var(--bg);
+  box-shadow:
+  inset 0 0 0 1.5px var(--muted),
+  0 0 0 3px var(--bg);
+}
+
+.tl[data-kind="finished"] .tlDot {
+  --dot: var(--merged);
+}
+
+/* Looked at: the row steps back, so what is left to look at is what stands out. */
+.tl.viewed .tlLine {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.tl.viewed .tlDot {
+  background: color-mix(in oklab, var(--dot) 40%, var(--bg));
+}
+
+/* Planned stays a ring on Home too, where the dot would otherwise fill with its work's colour. */
+:global(.timeline) .tl.from[data-kind="next"] .tlDot {
+  background: var(--bg);
+  box-shadow:
+  inset 0 0 0 1.5px var(--faint),
+  0 0 0 3px var(--bg);
+}
+
+.tl[data-weight="high"][data-kind="needs"] .tlBody {
+  /* The ground runs out past the text on both sides, so the words stay on the line every row's words start on. */
+  margin-inline: calc(-1 * var(--s3));
+  padding: var(--s3);
+  border-radius: var(--r-m);
+  background: color-mix(in oklab, var(--needs) 9%, var(--bg));
+}
+
+/* The dot follows the text down by the box's padding, so it stays on the first line. */
+.tl[data-weight="high"][data-kind="needs"] .tlDot {
+  margin-top: calc(8px + var(--s3));
+}
+
+/* The everyday: quieter, at the same size, and closer together. */
+.tl[data-weight="low"] {
+  --pad: var(--s2);
+}
+
+.tl[data-weight="low"] .tlLine,
+.tl[data-weight="low"] .tlText > a {
+  color: var(--text);
+}
+
+.tl[data-weight="low"] .tlText {
+  color: var(--muted);
+}
+
+.tl :global(.shot)[style*="--w"] {
+  --max-h: 200px;
+}
+
+@media (max-width: 760px) {
+  /* No room beside the line, so its time sits over it, where it can't be read as the time of a chip under the line. */
+  .tl {
+    grid-template-columns: var(--mark) minmax(0, 1fr);
+  }
+
+  .tlDot {
+    grid-row: 1 / span 2;
+  }
+
+  .tlBody {
+    grid-area: 2 / 2;
+  }
+
+  /* The dot centres on the time's line where there is one, and on the text's first line where there isn't. */
+  .tl:not(.from):has(> .stamp:not(.same)) .tlDot {
+    margin-top: 5px;
+  }
+
+  /* On Home the time shares the line that says where a row is from. */
+  .tl.from .tlBody {
+    grid-area: 1 / 2 / span 2;
+  }
+
+  .tl.from .stamp {
+    justify-self: end;
+    margin: 0;
+  }
+
+  .tl.from :global(.tl-from) {
+    max-width: calc(100% - 3.5em);
+  }
+
+  /* No margin beside the line here, so the viewed mark has a column of its own. */
+  .tl:has(> .tlView) {
+    grid-template-columns: var(--mark) minmax(0, 1fr) var(--hit);
+  }
+
+  .tlView {
+    grid-area: 1 / 3 / span 2;
+    margin-inline: var(--s1) calc((18px - var(--hit)) / 2);
+  }
+
+  .tl .stamp {
+    grid-area: 1 / 2;
+    margin: 0 0 2px;
+    text-align: start;
+  }
+
+  .stamp.same {
+    display: none;
+  }
+}

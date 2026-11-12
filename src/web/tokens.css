@@ -1,0 +1,220 @@
+@import "@fontsource-variable/jetbrains-mono/wght.css";
+
+/*
+ * Every design value the hub uses. app.css reads only these.
+ * Every colour is from Tailwind v4's default palette, under Tailwind's own names, and the hub's
+ * colours below are names for what each one means. The ground is neutral grey, with no tint, and the accent is blue.
+ * Orange waits on the user, emerald is running or shipped, violet has merged, blue is what is open
+ * now or new since the last visit, and amber marks what a page flagged as important.
+ */
+:root {
+  color-scheme: dark;
+
+  /* Tailwind v4.3 colours, as published in tailwindcss/theme.css */
+  --color-white: #fff;
+  --color-neutral-50: oklch(98.5% 0 none);
+  --color-neutral-100: oklch(97% 0 none);
+  --color-neutral-200: oklch(92.2% 0 none);
+  --color-neutral-300: oklch(87% 0 none);
+  --color-neutral-400: oklch(70.8% 0 none);
+  --color-neutral-500: oklch(55.6% 0 none);
+  --color-neutral-600: oklch(43.9% 0 none);
+  --color-neutral-700: oklch(37.1% 0 none);
+  --color-neutral-800: oklch(26.9% 0 none);
+  --color-neutral-900: oklch(20.5% 0 none);
+  --color-neutral-950: oklch(14.5% 0 none);
+  --color-blue-400: oklch(70.7% 0.165 254.624);
+  --color-blue-600: oklch(54.6% 0.245 262.881);
+  --color-sky-300: oklch(82.8% 0.111 230.318);
+  --color-sky-400: oklch(74.6% 0.16 232.661);
+  --color-sky-700: oklch(50% 0.134 242.749);
+  --color-emerald-400: oklch(76.5% 0.177 163.223);
+  --color-emerald-700: oklch(50.8% 0.118 165.612);
+  --color-orange-400: oklch(75% 0.183 55.934);
+  --color-orange-700: oklch(55.3% 0.195 38.402);
+  --color-amber-300: oklch(87.9% 0.169 91.605);
+  --color-amber-500: oklch(76.9% 0.188 70.08);
+  --color-yellow-600: oklch(68.1% 0.162 75.834);
+  --color-violet-400: oklch(70.2% 0.183 293.541);
+  --color-violet-600: oklch(54.1% 0.281 293.009);
+  --color-teal-400: oklch(77.7% 0.152 181.912);
+  --color-teal-700: oklch(51.1% 0.096 186.391);
+  --color-indigo-400: oklch(67.3% 0.182 276.935);
+  --color-indigo-600: oklch(51.1% 0.262 276.966);
+  --color-cyan-400: oklch(78.9% 0.154 211.53);
+  --color-cyan-700: oklch(52% 0.105 223.128);
+  --color-lime-400: oklch(84.1% 0.238 128.85);
+  --color-lime-700: oklch(53.2% 0.157 131.589);
+
+  /* Ground, darkest to lightest */
+  --bar: var(--color-neutral-950);
+  --side: var(--color-neutral-950);
+  --bg: var(--color-neutral-900);
+  /* Half a step up from the screen: Tailwind has no shade between 900 and 800 */
+  --raise: color-mix(in oklab, var(--color-neutral-800) 55%, var(--color-neutral-900));
+  /* The ground of an icon tile that carries no project colour: Home, and settled work. */
+  --tile: var(--raise);
+  --hover: color-mix(in oklab, var(--color-neutral-800) 60%, transparent);
+  --sel: var(--color-neutral-800);
+  --line: var(--color-neutral-800);
+  --line-strong: var(--color-neutral-600);
+  /* A button is a quiet filled shape, a step above any ground it sits on, and a step more under the pointer. */
+  --control: var(--color-neutral-800);
+  --control-hover: var(--color-neutral-700);
+  /* What floats over the screen, such as a menu: a surface a step up, and the shadow that lifts it. */
+  --float: var(--color-neutral-800);
+  --float-hover: var(--color-neutral-700);
+  --float-shadow: 0 12px 32px rgb(0 0 0 / 0.45);
+
+  /*
+   * Text has two colours. --text is everything that is read: titles, headings, paragraphs, rows.
+   * --muted is what stands beside it: times, counts, where a thing is from, a control at rest.
+   * Hierarchy comes from the type roles below, not from more greys. --faint is for marks and lines, never words.
+   */
+  --text: var(--color-neutral-200);
+  --muted: var(--color-neutral-400);
+  --faint: var(--color-neutral-500);
+
+  /* What each colour means */
+  --accent: var(--color-blue-400);
+  --link: var(--color-blue-400);
+  --focus: var(--color-blue-400);
+  --needs: var(--color-orange-400);
+  --working: var(--color-emerald-400);
+  --merged: var(--color-violet-400);
+  --star: var(--color-amber-300);
+  /* Text set on a solid colour */
+  --on-colour: var(--color-neutral-950);
+
+  /* Projects take one of these in turn, on their tile only */
+  --p0: var(--color-sky-400);
+  --p1: var(--color-violet-400);
+  --p2: var(--color-teal-400);
+  --p3: var(--color-indigo-400);
+  --p4: var(--color-cyan-400);
+  --p5: var(--color-lime-400);
+
+  --shade: rgb(0 0 0 / 0.45);
+  --scrim: var(--color-neutral-950);
+
+  /*
+   * Type. Four sizes and two weights, and no others. Each size is a role with its line height and weight
+   * in one `font` value: use the role, never a size. A label inside body text is the body role at --strong.
+   * Mono is for code, branches and pull request numbers only, at the small size; times and counts are sans.
+   */
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* 32px: the name of a screen or of a work, set tight */
+  --t-title: 600 2rem / 1.15 var(--sans);
+  --title-tracking: -0.025em;
+  /* 17px: a section, a day, a card, an ask */
+  --t-heading: 600 1.0625rem / 1.3 var(--sans);
+  /* 15px: everything that is read, and the tabs */
+  --t-body: 400 0.9375rem / 1.6 var(--sans);
+  /* 13px: what stands beside the reading: times, counts, where something is from, the outline, buttons */
+  --t-small: 400 0.8125rem / 1.5 var(--sans);
+  --t-code: 400 0.8125rem / 1.5 var(--mono);
+  --strong: 600;
+
+  /* Space: 4, 8, 12, 16, 24, 32, 48, 64. The gap between groups is at least twice the gap inside one. */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s6: 24px;
+  --s8: 32px;
+  --s12: 48px;
+  --s16: 64px;
+
+  /* Shape */
+  --r-s: 4px;
+  --r-m: 8px;
+  --r-l: 12px;
+  --r-pill: 999px;
+
+  /*
+   * Layout. Every screen has one edge that everything starts on: the gutter. A heading, a label and a
+   * paragraph start on it. Under them, a row's mark (a dot, a bullet, a pull request's icon, a fold's
+   * caret) sits in a column of its own at that edge, --mark wide, and the row's text starts after it.
+   * So the marks of every list on a page form one vertical line, and so does their text.
+   */
+  --side-w: 288px;
+  /* How far the sidebar's content sits from its edges: the brand, the labels and every row. */
+  --side-inset: 20px;
+  --tabs-h: 44px;
+  --tab-first: 6.75rem;
+  --row-h: 56px;
+  --gutter: 64px;
+  --mark: 28px;
+  --avatar-xs: 20px;
+  --avatar-s: 28px;
+  --avatar-m: 36px;
+  --page: 72rem;
+  /* The reading column. Wider than the 75 characters a book would use, so a screen doesn't sit half empty. */
+  --read: 44rem;
+  --rail: 224px;
+  --board-rail: 320px;
+  --search: 220px;
+  --foot: 48px;
+  --thumb: 132px;
+  --hit: 32px;
+
+  /* Motion */
+  --fast: 90ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* The light look. The page says which look it is in: what the system asks for, unless you picked one (lib/theme.ts). */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bar: var(--color-neutral-100);
+  --side: var(--color-neutral-50);
+  --bg: var(--color-white);
+  --raise: var(--color-neutral-50);
+  /* The sidebar is as light as a raised surface here, so a tile needs a step more to show. */
+  --tile: var(--color-neutral-200);
+  --hover: color-mix(in oklab, var(--color-neutral-200) 60%, transparent);
+  --sel: var(--color-neutral-200);
+  --line: var(--color-neutral-200);
+  --line-strong: var(--color-neutral-400);
+  --control: var(--color-neutral-200);
+  --control-hover: var(--color-neutral-300);
+  --float: var(--color-white);
+  --float-hover: var(--color-neutral-100);
+  --float-shadow: 0 12px 32px rgb(0 0 0 / 0.12);
+
+  --text: var(--color-neutral-900);
+  --muted: var(--color-neutral-600);
+  --faint: var(--color-neutral-500);
+
+  --accent: var(--color-blue-600);
+  --link: var(--color-blue-600);
+  --focus: var(--color-blue-600);
+  --needs: var(--color-orange-700);
+  --working: var(--color-emerald-700);
+  --merged: var(--color-violet-600);
+  /* Yellow, not amber: next to the orange that means "needs you", amber reads as the same colour. */
+  --star: var(--color-yellow-600);
+  --on-colour: var(--color-white);
+
+  --p0: var(--color-sky-700);
+  --p1: var(--color-violet-600);
+  --p2: var(--color-teal-700);
+  --p3: var(--color-indigo-600);
+  --p4: var(--color-cyan-700);
+  --p5: var(--color-lime-700);
+
+  --shade: rgb(0 0 0 / 0.14);
+  --scrim: var(--color-neutral-100);
+}
+
+@media (max-width: 760px) {
+  :root {
+    --gutter: 16px;
+    /* A phone's title is a step smaller, so most names fit on two lines. */
+    --t-title: 600 1.5rem / 1.2 var(--sans);
+    --hit: 40px;
+    --row-h: 60px;
+  }
+}

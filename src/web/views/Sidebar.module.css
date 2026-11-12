@@ -1,0 +1,253 @@
+.sideNav {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Home, and every work under it, share one grid: a mark column, then the name. */
+/* The row's own inset plus its margin is the sidebar's inset, so its content lines up with the labels and the brand. */
+.homeRow,
+.row {
+  display: grid;
+  grid-template-columns: var(--avatar-s) minmax(0, 1fr) auto;
+  column-gap: var(--s3);
+  align-items: center;
+  margin-inline: var(--s2);
+  padding: var(--s2) calc(var(--side-inset) - var(--s2));
+  border-radius: var(--r-m);
+}
+
+.homeRow {
+  flex: none;
+  margin-top: var(--s2);
+}
+
+/* The user's own list sits right under Home, as close to it as one work's row is to the next. */
+.todosRow {
+  margin-top: 2px;
+}
+
+/* Home has a tile like every work under it, so the icons form one column. */
+:global(.avatar).home {
+  background: var(--tile);
+  color: var(--text);
+}
+
+/* On the selected row the tile takes a stronger ground, or it would be the row's own colour. */
+.homeRow[aria-current="page"] :global(.avatar).home,
+.row[aria-current="page"] :global(.avatar):global(.quiet) {
+  background: var(--line-strong);
+  color: var(--text);
+}
+
+.homeRow:hover,
+.row:hover {
+  background: var(--hover);
+}
+
+.homeRow[aria-current="page"],
+.row[aria-current="page"] {
+  background: var(--sel);
+  color: var(--text);
+}
+
+.sideList {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-block: var(--s4);
+}
+
+.sideLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  /* Twice the room above as below, so the label belongs to the rows under it. */
+  padding: var(--s3) var(--side-inset) var(--s1);
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.sideLabel :global(.n) {
+  margin-inline-start: auto;
+}
+
+.sideLabel svg {
+  width: 10px;
+  height: 10px;
+}
+
+button.sideLabel:hover {
+  color: var(--text);
+}
+
+button.sideLabel:focus-visible {
+  outline-offset: -2px;
+}
+
+.sideEmpty {
+  padding: var(--s1) var(--side-inset) var(--s2);
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+/* Settled work stays at the foot of the sidebar, folded until asked for. */
+.sideSettled {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 46%;
+  border-top: 1px solid var(--line);
+}
+
+.sideSettled.open {
+  padding-bottom: var(--s2);
+}
+
+.sideSettled ul {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* The tile is centred on both lines. */
+.row {
+  grid-template-rows: auto auto;
+  align-content: center;
+  align-items: baseline;
+  min-height: var(--row-h);
+}
+
+.row :global(.avatar) {
+  grid-row: 1 / 3;
+  align-self: center;
+}
+
+/* Settled work is a log to scan: one short line each, in the small size, with its face small in the same column. */
+.row.dense {
+  grid-template-rows: auto;
+  min-height: 28px;
+  padding-block: 2px;
+  font: var(--t-small);
+}
+
+.row.dense :global(.avatar) {
+  grid-row: 1;
+  justify-self: center;
+}
+
+.rowTitle {
+  overflow: hidden;
+  color: var(--text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* With a project under it, the name has the whole first line, and the time sits on the project's line and baseline. */
+.row:has(.rowSub) .rowTitle {
+  grid-column: 2 / 4;
+}
+
+.row[aria-current="page"] .rowTitle {
+  color: var(--text);
+}
+
+.row.unread .rowTitle {
+  color: var(--text);
+}
+
+.row.stale:not([aria-current="page"]) .rowTitle {
+  color: var(--muted);
+}
+
+.rowSub {
+  grid-column: 2;
+  overflow: hidden;
+  color: var(--muted);
+  font: var(--t-small);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.rowEnd {
+  display: flex;
+  grid-column: 3;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* The time gives the pair its baseline. Left to the dot before it, the pair would sit a pixel low. */
+.rowEnd :global(.when) {
+  align-self: baseline;
+}
+
+.row.ghost {
+  display: block;
+  position: relative;
+}
+
+.row.ghost::before,
+.row.ghost::after {
+  content: "";
+  position: absolute;
+  inset-inline-start: var(--s4);
+  height: 8px;
+  border-radius: var(--r-s);
+  background: var(--raise);
+}
+
+.row.ghost::before {
+  top: 14px;
+  width: 55%;
+}
+
+.row.ghost::after {
+  top: 30px;
+  width: 75%;
+}
+
+.resizer {
+  grid-area: 1 / 1;
+  justify-self: end;
+  z-index: 5;
+  width: 9px;
+  margin-inline-end: -5px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.resizer::after {
+  content: "";
+  display: block;
+  width: 1px;
+  height: 100%;
+  margin: 0 auto;
+  background: transparent;
+  transition: background var(--fast) var(--ease);
+}
+
+.resizer:hover::after,
+.resizer:active::after,
+.resizer:focus-visible::after {
+  width: 2px;
+  background: var(--line-strong);
+}
+
+.resizer:focus-visible {
+  outline: none;
+}
+
+/* The dot's ring is the colour of what it sits on. */
+.row[aria-current="page"] :global(.avatar-dot) {
+  border-color: var(--sel);
+}
+
+@media (max-width: 760px) {
+  .resizer {
+    display: none;
+  }
+}

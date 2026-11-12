@@ -1,0 +1,175 @@
+/*
+ * The app's boxes and a screen's columns: the sidebar beside the main part, the bar over the screen, the reading
+ * column with a rail beside it and the days down it. Each is followed here by how it changes on a narrow screen and a phone.
+ */
+.app {
+  display: grid;
+  grid-template-columns: var(--side-w) minmax(0, 1fr);
+  height: 100dvh;
+}
+
+.side {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--side);
+  border-inline-end: 1px solid var(--line);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex: none;
+  height: var(--tabs-h);
+  padding-inline: var(--side-inset);
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+  font: var(--t-body);
+  font-family: var(--mono);
+  font-weight: var(--strong);
+}
+
+/* Three bars, each further along than the one below. */
+.brand-mark {
+  width: 12px;
+  height: 12px;
+  background:
+  linear-gradient(var(--needs) 0 0) 0 0 / 100% 2px,
+  linear-gradient(var(--accent) 0 0) 0 5px / 66% 2px,
+  linear-gradient(var(--working) 0 0) 0 10px / 33% 2px;
+  background-repeat: no-repeat;
+}
+
+.side li + li {
+  margin-top: 2px;
+}
+
+.main {
+  grid-area: 1 / 2;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.topbar {
+  display: flex;
+  align-items: stretch;
+  flex: none;
+  height: var(--tabs-h);
+  padding-inline-end: var(--s3);
+  background: var(--side);
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar .brand {
+  display: none;
+}
+
+.screen {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  container-type: inline-size;
+}
+
+/* ------------------------------------------------------------------ Shared pieces */
+/* Every screen is the same width and centred, so the content sits balanced and no tab starts on a different edge. */
+.wrap {
+  max-width: var(--page);
+  margin-inline: auto;
+  padding: var(--s12) var(--gutter) var(--foot);
+}
+
+.feed-grid {
+  display: grid;
+  grid-template-columns: minmax(0, var(--read)) var(--rail);
+  justify-content: space-between;
+  gap: var(--s12);
+  align-items: start;
+}
+
+.feed-main {
+  min-width: 0;
+}
+
+.day + .day {
+  margin-top: var(--s16);
+}
+
+/* A day is a label inside its list, a step under the list's own name. */
+.day-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  color: var(--text);
+  font-weight: var(--strong);
+}
+
+.day-head + .timeline {
+  margin-top: var(--s6);
+}
+
+/* What stands beside the page: a work's outline or a feed's days, then the artifacts the work made. It stays in view as the page scrolls. */
+.side-rail {
+  position: sticky;
+  top: var(--s8);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s8);
+  min-width: 0;
+}
+
+@container (max-width: 1000px) {
+  /* With no rail beside it the column is the page's whole width, and all of it runs as wide: the goal, a list's name and its tools end where the rows do. */
+  .wrap {
+    --read: 100%;
+  }
+
+  .feed-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  /* No room beside the page for its outline, the feed's days or the artifacts. The Media tab holds the artifacts. */
+  .side-rail {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  /* No sidebar: the brand goes Home, and settled work is listed under the board. */
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .side {
+    display: none;
+  }
+
+  .main {
+    grid-column: 1;
+  }
+
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 0;
+  }
+
+  .topbar .brand {
+    display: flex;
+    order: 0;
+    border-bottom: 0;
+    padding-inline: var(--gutter) var(--s3);
+    height: 48px;
+  }
+
+  .wrap {
+    padding-top: var(--s6);
+  }
+}

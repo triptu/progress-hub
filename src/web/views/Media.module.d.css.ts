@@ -1,0 +1,27 @@
+// Written by scripts/css-types.ts from the module beside it. Run `bun run css-types` after changing its classes.
+declare const classes: {
+  readonly artifact: string;
+  readonly in: string;
+  readonly layout: string;
+  readonly tile: string;
+  readonly tileCap: string;
+  readonly tileFrame: string;
+  readonly tileOut: string;
+  readonly tilePage: string;
+  readonly tilePlay: string;
+  readonly tileText: string;
+  readonly tileWork: string;
+  readonly viewer: string;
+  readonly viewerCap: string;
+  readonly viewerFit: string;
+  readonly viewerHead: string;
+  readonly viewerMeta: string;
+  readonly viewerNext: string;
+  readonly viewerPrev: string;
+  readonly viewerStage: string;
+  readonly viewerText: string;
+  readonly viewerWhere: string;
+  readonly zoomed: string;
+  readonly zooms: string;
+};
+export default classes;

@@ -1,0 +1,441 @@
+/*
+ * The pieces every view is built from: a screen's head, buttons, a work's face, times and counts, folds,
+ * the outline and tiles. These names are shared, so each is one thing everywhere. The file ends with how
+ * the pieces change on a narrow screen and a phone.
+ */
+/* A count beside a name. */
+.n {
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.unread-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-s);
+  color: var(--muted);
+  font: var(--t-code);
+}
+
+/* A screen's name, with what acts on its list at the right end of the same row. */
+.view-head {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s4);
+  max-width: var(--read);
+  margin-bottom: var(--s8);
+}
+
+/* What narrows a list or acts on all of it: small, so the list's name stays the loudest thing in its row. */
+.tools {
+  --hit: 28px;
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s1);
+}
+
+.tools .btn {
+  margin-inline-start: var(--s1);
+  padding-inline: var(--s2);
+}
+
+.tools svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* The media grid runs the page's whole width, and its head with it. */
+.media > .view-head {
+  max-width: none;
+}
+
+.view-head h1,
+.work-head h1 {
+  color: var(--text);
+  font: var(--t-title);
+  letter-spacing: var(--title-tracking);
+  text-wrap: balance;
+}
+
+.nothing {
+  padding-block: var(--s6);
+  color: var(--muted);
+}
+
+.when {
+  flex: none;
+  color: var(--muted);
+  font: var(--t-small);
+  white-space: nowrap;
+}
+
+/* A work's face: its project's icon on a tile of the project's colour. */
+.avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--avatar-m);
+  height: var(--avatar-m);
+  border-radius: var(--r-m);
+  background: color-mix(in oklab, var(--proj) 16%, var(--bg));
+  color: var(--proj);
+}
+
+.avatar svg {
+  width: 56%;
+  height: 56%;
+}
+
+.avatar[data-size="xs"] {
+  width: var(--avatar-xs);
+  height: var(--avatar-xs);
+  border-radius: var(--r-s);
+}
+
+.avatar[data-size="xs"] svg {
+  width: 70%;
+  height: 70%;
+}
+
+.avatar[data-size="s"] {
+  width: var(--avatar-s);
+  height: var(--avatar-s);
+  border-radius: var(--r-s);
+}
+
+.avatar.quiet {
+  background: var(--tile);
+  color: var(--muted);
+}
+
+.avatar-dot {
+  position: absolute;
+  inset-inline-end: -3px;
+  bottom: -3px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--side);
+  border-radius: 50%;
+  background: var(--working);
+}
+
+.avatar-dot[data-phase="needs"] {
+  background: var(--needs);
+}
+
+.avatar[data-size="xs"] .avatar-dot {
+  display: none;
+}
+
+.pill {
+  flex: none;
+  padding: 2px var(--s2);
+  border-radius: var(--r-pill);
+  /* One step above a card, so it still reads as a pill on one. */
+  background: var(--sel);
+  color: var(--muted);
+  font: var(--t-small);
+  white-space: nowrap;
+}
+
+.pill[data-phase="needs"] {
+  background: color-mix(in oklab, var(--needs) 18%, var(--bg));
+  color: var(--needs);
+}
+
+.pill[data-phase="working"] {
+  background: color-mix(in oklab, var(--working) 15%, var(--bg));
+  color: var(--working);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  flex: none;
+  min-height: var(--hit);
+  padding-inline: var(--s3);
+  border-radius: var(--r-m);
+  background: var(--control);
+  color: var(--text);
+  font: var(--t-small);
+  white-space: nowrap;
+}
+
+/* The second selector is written to outrank a plain icon button's hover, which would dim a filled one. */
+.btn:hover,
+.icon-btn.tool:hover:not(:disabled) {
+  background: var(--control-hover);
+}
+
+.btn:active {
+  background: var(--control);
+}
+
+.btn .n {
+  color: var(--muted);
+}
+
+.btn:disabled {
+  color: var(--muted);
+}
+
+.btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--hit);
+  height: var(--hit);
+  border-radius: var(--r-m);
+  color: var(--muted);
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.icon-btn:disabled {
+  opacity: 0.35;
+}
+
+.icon-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* An icon button that stands among buttons takes their ground. Pressed in, it keeps what it shows lit. */
+.icon-btn.tool {
+  background: var(--control);
+  color: var(--text);
+}
+
+/* On: a brighter ground and the accent. The star keeps the colour the star has on a line. */
+.icon-btn.tool[aria-pressed="true"] {
+  background: var(--control-hover);
+  color: var(--accent);
+}
+
+.more {
+  display: inline-block;
+  padding-block: var(--s2);
+  color: var(--link);
+  font: var(--t-small);
+}
+
+.more:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* A two-way switch. */
+/* A pull request on one line: state, number, title, and its state in words on the right edge. */
+.ref {
+  display: grid;
+  grid-template-columns: 24px auto minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  color: var(--text);
+}
+
+.ref > .when {
+  min-width: 2.5em;
+  margin-inline-start: var(--s3);
+  text-align: end;
+}
+
+.cmd {
+  margin: var(--s2) 0 0;
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--side);
+  color: var(--text);
+  font: var(--t-code);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * On Home a row opens with the work it is from: the project's face and the work's name, which goes to
+ * that work. It is one text line tall, so the dot, the time and the viewed mark sit on it as they sit on
+ * a row's first line anywhere else.
+ */
+.tl-from {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: fit-content;
+  max-width: 100%;
+  height: 1.5rem;
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.tl-from > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.shot {
+  display: block;
+  max-width: min(100%, 420px);
+  max-height: 200px;
+  margin-top: var(--s2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+}
+
+.work-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  column-gap: var(--s4);
+  align-items: center;
+  margin-bottom: var(--s8);
+}
+
+.work-head > * {
+  grid-column: 1;
+}
+
+.work-head > .btn {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.sec-title {
+  color: var(--text);
+  font: var(--t-heading);
+}
+
+/* Every list that hides part of itself opens with this: a caret in the mark column and what it holds, in words. */
+.fold > summary {
+  display: inline-grid;
+  grid-template-columns: var(--mark) auto;
+  align-items: center;
+  padding-block: var(--s2);
+  color: var(--muted);
+  font: var(--t-small);
+  list-style: none;
+}
+
+.fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.fold > summary:hover {
+  color: var(--text);
+}
+
+.fold > summary svg {
+  width: 10px;
+  height: 10px;
+  margin-inline: 5px;
+}
+
+.fold[open] > summary svg {
+  transform: rotate(90deg);
+}
+
+.fold[open] .when-closed,
+.fold:not([open]) .when-open {
+  display: none;
+}
+
+.outline-title {
+  margin-bottom: var(--s2);
+  padding-inline-start: var(--s3);
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.ol {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  width: 100%;
+  padding: 5px var(--s2) 5px calc(var(--s3) - 2px);
+  border-inline-start: 2px solid var(--line);
+  color: var(--muted);
+  font: var(--t-small);
+  text-align: start;
+  white-space: nowrap;
+}
+
+.ol:hover {
+  color: var(--text);
+}
+
+.ol[aria-current="location"] {
+  border-inline-start-color: var(--accent);
+  color: var(--text);
+}
+
+.ol-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ------------------------------------------------------------------ Media */
+.media .day-head {
+  margin-bottom: var(--s4);
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--s8) var(--s6);
+}
+
+/* One to a row: each as large as the page lets it be, with its caption beside it where the outline stands on other tabs. */
+.tiles.rows {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s12);
+}
+
+@media (max-width: 760px) {
+  /* The way out to the thread is an icon beside the name, so the page starts sooner. */
+  .work-head > .btn {
+    justify-content: center;
+    width: var(--hit);
+    padding-inline: 0;
+  }
+
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* A screen's filters go under its name here: beside it they squeezed the line that says what the screen holds. */
+  .view-head {
+    flex-wrap: wrap;
+  }
+
+  .view-head .tools {
+    justify-content: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}

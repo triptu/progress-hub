@@ -1,0 +1,243 @@
+.prose {
+  overflow-wrap: break-word;
+}
+
+.prose > :first-child {
+  margin-top: 0;
+}
+
+.prose > :last-child {
+  margin-bottom: 0;
+}
+
+.prose p,
+.prose ul,
+.prose ol,
+.prose pre,
+.prose blockquote,
+.prose table {
+  margin: 0 0 var(--s4);
+}
+
+.prose p {
+  text-wrap: pretty;
+}
+
+/* A list is a run of mark rows: its bullets stand in the mark column, in line with every dot and icon on the page. */
+.prose ul,
+.prose ol {
+  padding: 0 0 0 var(--mark);
+}
+
+.prose ul {
+  list-style: none;
+}
+
+.prose ul > li {
+  position: relative;
+}
+
+.prose ul > li::before {
+  content: "";
+  position: absolute;
+  /* Centred where a timeline's dot is centred: 10px in from the edge. */
+  inset-inline-start: calc(7px - var(--mark));
+  top: calc(0.5lh - 3px);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+
+.prose ol {
+  list-style: decimal;
+}
+
+.prose li {
+  margin-block: var(--s3);
+}
+
+.prose li::marker {
+  color: var(--muted);
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  margin: var(--s4) 0 var(--s2);
+  color: var(--text);
+  font-weight: var(--strong);
+}
+
+.prose strong,
+.prose-inline strong {
+  color: var(--text);
+}
+
+.prose a:not(.fig),
+.prose-inline a {
+  color: var(--link);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, var(--link) 40%, transparent);
+  text-underline-offset: 3px;
+}
+
+.prose a:not(.fig):hover,
+.prose-inline a:hover {
+  text-decoration-color: currentColor;
+}
+
+.prose code,
+.prose-inline code {
+  padding: 0 3px;
+  border-radius: var(--r-s);
+  background: var(--raise);
+  font: var(--t-code);
+}
+
+.cmd code {
+  padding: 0;
+  background: none;
+  font: inherit;
+}
+
+.prose pre {
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--side);
+  overflow-x: auto;
+}
+
+.prose pre code {
+  padding: 0;
+  background: none;
+  color: var(--text);
+  font: var(--t-code);
+}
+
+.prose blockquote {
+  padding-inline-start: var(--s3);
+  border-inline-start: 2px solid var(--line-strong);
+  color: var(--muted);
+}
+
+.prose hr {
+  height: 1px;
+  margin-block: var(--s4);
+  border: 0;
+  background: var(--line);
+}
+
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.prose th {
+  padding: var(--s2) var(--s3) var(--s2) 0;
+  border-bottom: 1px solid var(--line-strong);
+  color: var(--muted);
+  font: var(--t-small);
+  text-align: start;
+}
+
+.prose td {
+  padding: var(--s2) var(--s3) var(--s2) 0;
+  border-bottom: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+  vertical-align: top;
+}
+
+.prose a.fig {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+}
+
+.prose img,
+.prose video,
+.prose iframe {
+  display: block;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--side);
+}
+
+.prose img {
+  max-height: 380px;
+}
+
+/*
+ * An image whose size the hub read holds its room before it loads: as wide as its column, its own pixels
+ * and its tallest allowed height let it be, at its own shape.
+ */
+.prose img[style*="--w"],
+.shot[style*="--w"] {
+  --max-h: 380px;
+  /* No percentage here: the figure around it takes its width from the image, and max-width holds it to the column. */
+  width: min(calc(var(--w) * 1px), calc(var(--max-h) * var(--w) / var(--h)));
+  height: auto;
+  max-height: none;
+  aspect-ratio: var(--w) / var(--h);
+}
+
+.prose a.fig:hover img {
+  border-color: var(--line-strong);
+}
+
+.prose video,
+.prose iframe {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+}
+
+.prose .cap {
+  display: block;
+  margin-top: var(--s1);
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+/* Images written one after another sit side by side as a strip of thumbnails. */
+.prose p:has(> .fig + .fig) {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: var(--s3);
+}
+
+.prose p:has(> .fig + .fig) br {
+  display: none;
+}
+
+.prose p:has(> .fig + .fig) img {
+  width: 100%;
+  height: 112px;
+  object-fit: cover;
+  object-position: top left;
+}
+
+.prose p:has(> .fig + .fig) .cap {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.spot img,
+img.spot,
+video.spot,
+iframe.spot {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  .prose code,
+  .prose-inline code {
+    padding: 0;
+    background: none;
+  }
+}

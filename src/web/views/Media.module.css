@@ -1,0 +1,353 @@
+/* How the list is laid out stands apart from what narrows it. */
+:global(.tools) :not(.layout) + .layout {
+  margin-inline-start: var(--s4);
+}
+
+.artifact {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: var(--s2);
+  align-items: start;
+  padding: 5px var(--s2) 5px var(--s3);
+  color: var(--text);
+  font: var(--t-small);
+}
+
+.artifact svg {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  color: var(--muted);
+}
+
+/* A name runs to two lines before it is cut, so two artifacts can be told apart. */
+.artifact span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.artifact:hover {
+  color: var(--text);
+}
+
+.artifact:hover span {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+:global(.tiles):global(.rows) .tile {
+  grid-template-columns: minmax(0, 1fr) var(--rail);
+  column-gap: var(--s12);
+}
+
+:global(.tiles):global(.rows) .tileFrame {
+  aspect-ratio: auto;
+  margin-bottom: 0;
+  background: none;
+}
+
+:global(.tiles):global(.rows) .tileFrame img,
+:global(.tiles):global(.rows) .tileFrame video {
+  height: auto;
+  max-height: 70vh;
+}
+
+/* A page keeps the shape of a screen. A document is a short row with its name. */
+:global(.tiles):global(.rows) .tileFrame[data-kind="page"] {
+  aspect-ratio: 16 / 10;
+}
+
+:global(.tiles):global(.rows) .tilePage {
+  height: 96px;
+}
+
+:global(.tiles):global(.rows) .tileCap {
+  display: block;
+}
+
+.tile {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+}
+
+.tileFrame {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 10;
+  margin-bottom: var(--s2);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--raise);
+}
+
+.tile:hover .tileFrame {
+  border-color: var(--line-strong);
+}
+
+.tileFrame img,
+.tileFrame video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: top;
+}
+
+/*
+ * A page shows itself, still: laid out as on a 1280 by 800 screen and scaled down to the tile, which opens it.
+ * The scale is the tile's width over 1280px; tan(atan2()) is how CSS divides one length by another.
+ */
+.tileFrame[data-kind="page"] {
+  container-type: inline-size;
+}
+
+.tileFrame iframe:not(.in) {
+  visibility: hidden;
+}
+
+.tileFrame iframe {
+  display: block;
+  width: 1280px;
+  height: 800px;
+  border: 0;
+  background: #ffffff;
+  pointer-events: none;
+  scale: tan(atan2(100cqw, 1280px));
+  transform-origin: 0 0;
+}
+
+.tilePlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  background: rgb(0 0 0 / 0.3);
+}
+
+.tilePlay svg {
+  width: 28px;
+  height: 28px;
+}
+
+.tilePage {
+  position: relative;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--s2);
+  height: 100%;
+  padding: var(--s2);
+  color: var(--muted);
+  font: var(--t-small);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.tilePage svg {
+  width: 22px;
+  height: 22px;
+}
+
+.tilePage .tileOut {
+  position: absolute;
+  inset-block-start: var(--s2);
+  inset-inline-end: var(--s2);
+  width: 14px;
+  height: 14px;
+}
+
+.tileText {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+}
+
+/* Two lines hold most captions whole. The viewer has the rest. */
+.tileCap {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.tile:hover .tileCap {
+  color: var(--text);
+}
+
+.tileWork {
+  overflow: hidden;
+  color: var(--muted);
+  font: var(--t-small);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  grid-template: auto minmax(0, 1fr) / minmax(0, 1fr);
+  background: var(--scrim);
+}
+
+.viewerHead {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--line);
+  background: var(--side);
+}
+
+.viewerText {
+  flex: 1;
+  min-width: 0;
+}
+
+/* One line each, so the picture under them stays put from one to the next. */
+.viewerCap,
+.viewerMeta {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.viewerCap {
+  color: var(--text);
+}
+
+.viewerMeta {
+  color: var(--muted);
+  font: var(--t-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.viewerStage {
+  position: relative;
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  min-height: 0;
+}
+
+/* What is shown, fitted to the stage with room around it for the arrows. */
+.viewerFit {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  padding: var(--s8) var(--s16);
+  overflow: auto;
+}
+
+.viewerFit img,
+.viewerFit video {
+  max-width: 100%;
+  max-height: 100%;
+  /* In the middle while it fits, and from its top left corner once it is larger than the stage, so all of it can be scrolled to. */
+  margin: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+}
+
+.viewerFit.zooms img {
+  cursor: zoom-in;
+}
+
+/* At its full size, to be dragged or scrolled. */
+.viewerFit.zoomed {
+  grid-template: auto / auto;
+}
+
+.viewerFit.zoomed img {
+  max-width: none;
+  max-height: none;
+  cursor: zoom-out;
+}
+
+.viewerFit.zoomed img:active {
+  cursor: grabbing;
+}
+
+.viewerFit iframe {
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: #ffffff;
+}
+
+.viewerPrev,
+.viewerNext {
+  position: absolute;
+  top: 50%;
+  translate: 0 -50%;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--raise);
+  color: var(--text);
+}
+
+/* At full size the picture has the stage to itself. The arrow keys still move on. */
+.viewerStage:has(.zoomed) :global(.icon-btn) {
+  display: none;
+}
+
+.viewerPrev {
+  inset-inline-start: var(--s3);
+}
+
+.viewerNext {
+  inset-inline-end: var(--s3);
+}
+
+@container (max-width: 1000px) {
+  :global(.tiles):global(.rows) .tile {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  :global(.tiles):global(.rows) .tileFrame {
+    margin-bottom: var(--s2);
+  }
+}
+
+@media (max-width: 760px) {
+  /* The arrows sit under the picture here, so it keeps clear of them. */
+  .viewerFit {
+    padding: var(--s3) var(--s3) calc(40px + 2 * var(--s3));
+  }
+
+  /* Room for two lines of caption, kept even by a short one so the picture stays put, and the way to its page as an arrow alone. */
+  .viewerCap {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    min-height: 2lh;
+    white-space: normal;
+  }
+
+  .viewerWhere {
+    display: none;
+  }
+
+  .viewerHead :global(.btn) {
+    justify-content: center;
+    width: var(--hit);
+    padding-inline: 0;
+  }
+
+  .viewerPrev,
+  .viewerNext {
+    top: auto;
+    bottom: var(--s3);
+    translate: none;
+    background: var(--side);
+  }
+}

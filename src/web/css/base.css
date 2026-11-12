@@ -1,0 +1,103 @@
+/*
+ * Reads only the values in tokens.css. These files are what every view shares; a view's own styles are in the
+ * module beside it (views/Feed.module.css for Feed.tsx), where its class names are its alone.
+ *
+ * Two rules hold everywhere:
+ * - Type is one of four roles (--t-title, --t-heading, --t-body, --t-small) or --t-code, at one of two weights,
+ *   in one of two colours (--text for what is read, --muted for what stands beside it). Nothing else.
+ * - Everything on a screen starts on one edge. A row with a dot, bullet or small icon is a "mark row":
+ *   its mark sits in a column at that edge, its text starts after it, and its trailing time sits on the right edge.
+ *
+ * A selector is written once per block: test/css.test.ts says why.
+ */
+/* ------------------------------------------------------------------ Base */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* Emphasis is the one heavier weight the hub has, not the browser's bolder one. */
+b,
+strong {
+  font-weight: var(--strong);
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: var(--t-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+
+h1,
+h2,
+h3,
+p,
+ul,
+ol,
+figure {
+  margin: 0;
+  font: inherit;
+}
+
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* The arrow stays an arrow over anything clickable, as in a Mac app. Hover and focus styles say what is live. */
+a,
+button,
+summary {
+  cursor: default;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+svg {
+  flex: none;
+}
+
+time,
+.n {
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: var(--sel);
+  color: var(--text);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+  border-radius: var(--r-s);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}

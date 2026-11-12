@@ -1,0 +1,409 @@
+/*
+ * The user's own list. A line to add to it, then a row each: a circle to tick in the mark column, the words,
+ * a description and what they are about under them. A row's words are edited where they stand, in the same
+ * fields the line on top adds with.
+ */
+.todoAdd {
+  display: grid;
+  grid-template-columns: var(--mark) minmax(0, 1fr);
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+}
+
+/* The line lights for what is being typed, not for the choice beside it, which has a ring of its own. */
+.todoAdd:has(textarea:focus) {
+  border-bottom-color: var(--focus);
+}
+
+.todoAdd > svg {
+  width: 16px;
+  height: 16px;
+  /* Centred on the first line, which is as tall as a finger needs. */
+  margin-block: 14px;
+}
+
+/* A todo's fields: its words on a line with what acts on them, then its description. */
+.fields {
+  min-width: 0;
+}
+
+/* What acts on the words stays on their first line, however far they wrap. */
+.fieldsLine {
+  display: flex;
+  align-items: start;
+  gap: var(--s1);
+}
+
+.fieldsLine > :global(.icon-btn),
+.fieldsLine > .about {
+  margin-block: calc((44px - var(--hit)) / 2);
+}
+
+/* The line that adds is as tall as a finger needs, with the first line of words in its middle. */
+.todoAdd .words textarea {
+  padding-block: calc((44px - 1lh) / 2);
+}
+
+/* The words take the room, and hold the menu that typing @ or / opens under them. */
+.words {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Bare fields: the line under them shows their focus. */
+/* They grow with what they hold: the words from one line, the description from two. */
+.words textarea,
+.notes {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  resize: none;
+  field-sizing: content;
+}
+
+.words textarea {
+  color: var(--text);
+  font: var(--t-body);
+  overflow-wrap: anywhere;
+}
+
+.words textarea::placeholder,
+.notes::placeholder {
+  color: var(--muted);
+}
+
+.moreBtn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.moreBtn[aria-expanded="true"],
+.moreBtn[data-state="filled"] {
+  background: var(--sel);
+  color: var(--text);
+}
+
+/* Set as a description is in the list. */
+.notes {
+  min-height: 2lh;
+  color: var(--muted);
+  font: var(--t-small);
+  overflow-wrap: anywhere;
+}
+
+.notes:focus {
+  color: var(--text);
+}
+
+.fieldsFoot {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding-block: var(--s2) var(--s3);
+}
+
+/* Saving is at the far end, apart from what else acts on the todo. */
+.saveBtn {
+  margin-inline-start: auto;
+}
+
+/* The first thing under the fields starts on the words' edge, whatever its own inset. */
+.fieldsFoot > :first-child:global(.icon-btn) {
+  margin-inline-start: calc((16px - var(--hit)) / 2);
+}
+
+.removeBtn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.removeBtn:hover:not(:disabled) {
+  color: var(--needs);
+}
+
+/* What a new todo is about: a quiet button that says the choice, and a menu that opens under it. */
+.about {
+  position: relative;
+  display: flex;
+}
+
+.aboutBtn {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  max-width: 14rem;
+  height: var(--hit);
+  padding-inline: var(--s2);
+  border-radius: var(--r-m);
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.aboutBtn:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+/* The button stays lit while its menu is open, so it is plain what the menu belongs to. */
+.aboutOpen {
+  background: var(--sel);
+  color: var(--text);
+}
+
+.aboutBtn > svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.aboutBtn > .aboutCaret {
+  width: 10px;
+  height: 10px;
+}
+
+.aboutLabel {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/*
+ * Under what opened it, or over it when there is more room there. From the button its right edge is the
+ * button's, which is the reading column's. From the words its left edge is theirs. As tall as its choices,
+ * up to a height that scrolls.
+ */
+.aboutMenu {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + var(--s1));
+  inset-inline-end: 0;
+  width: max-content;
+  min-width: 13rem;
+  max-width: min(20rem, calc(100vw - 2 * var(--gutter)));
+  max-height: 20rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--s1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-l);
+  background: var(--float);
+  box-shadow: var(--float-shadow);
+}
+
+.aboutGroup {
+  padding: var(--s3) var(--s2) var(--s1);
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.aboutChoice {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  height: var(--hit);
+  padding-inline: var(--s2);
+  border-radius: var(--r-s);
+  color: var(--text);
+  font: var(--t-small);
+  cursor: default;
+}
+
+.aboutChoice > svg {
+  flex: none;
+  /* As wide as a work's face, so every label starts on one line. */
+  width: var(--avatar-xs);
+  height: 14px;
+  color: var(--muted);
+}
+
+.aboutActive {
+  background: var(--float-hover);
+}
+
+.aboutChoice > .aboutTick {
+  width: 12px;
+  height: 12px;
+  margin-inline-start: auto;
+  color: var(--text);
+}
+
+.aboutMenu[data-from="words"] {
+  inset-inline: 0 auto;
+}
+
+.aboutMenu[data-side="up"] {
+  top: auto;
+  bottom: calc(100% + var(--s1));
+}
+
+/* What was just deleted, with the way to put it back. It starts on the words' edge and stays until something else is done to the list. */
+.gone {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 44px;
+  padding-inline-start: var(--mark);
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.gone span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.todos {
+  padding-block: var(--s2);
+}
+
+.todo {
+  display: grid;
+  grid-template-columns: var(--mark) minmax(0, 1fr) var(--mark);
+  align-items: start;
+  padding-block: var(--s3);
+}
+
+/* A row being edited: its fields take the words' place and run to the row's end, over a line that shows where the typing goes. */
+.todo > .fields {
+  grid-column: 2 / -1;
+  border-bottom: 1px solid var(--line);
+}
+
+/* The words and the description stand where they stood before the edit, as wide and as tall as they were. A description still to be written is one line. */
+.todo > .fields .fieldsLine {
+  padding-inline-end: var(--mark);
+}
+
+.todo > .fields .notes {
+  width: calc(100% - var(--mark));
+  min-height: 1lh;
+}
+
+/* In a row the menu opens under its button with its left edge on the button's, since the button is at that end. */
+.todo > .fields .about .aboutMenu {
+  inset-inline: 0 auto;
+}
+
+.todo > .fields:has(textarea:focus) {
+  border-bottom-color: var(--focus);
+}
+
+/* The circle starts on the page's edge, where every list's marks start. It is as small as it looks, so its focus ring is a ring round it. */
+.todoCheck {
+  position: relative;
+  display: grid;
+  width: 18px;
+  height: 18px;
+  margin-block: 3px;
+  border-radius: 50%;
+  color: var(--faint);
+}
+
+/* The ring a row is ticked with: the same as the viewed mark on what shipped. */
+.todoCheck svg {
+  width: 18px;
+  height: 18px;
+}
+
+.todoCheck[aria-pressed="true"] {
+  color: var(--muted);
+}
+
+.todoCheck:focus-visible {
+  border-radius: 50%;
+}
+
+/* A row's buttons are small to look at and a finger wide to press. */
+.todoCheck::before,
+.todoRemove::before,
+.todoEdit::before {
+  content: "";
+  position: absolute;
+  inset: -13px;
+}
+
+.todoCheck:hover {
+  color: var(--text);
+}
+
+/* What is still to do is edited with a click on its words. */
+.todoOpen {
+  cursor: text;
+}
+
+.todoText {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.todo.done .todoText {
+  color: var(--muted);
+}
+
+/* More about it, kept to a few lines in the list. Editing shows all of it. */
+.todoNote {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  color: var(--muted);
+  font: var(--t-small);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The work a todo is about opens that work's own list. */
+.todo a:global(.tl-from):hover {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.todoRemove,
+.todoEdit {
+  position: relative;
+  justify-self: end;
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--faint);
+}
+
+.todoRemove svg,
+.todoEdit svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Where there is a pointer, a row shows its pencil only while it is pointed at or holds the focus. A click on the words does the same. */
+@media (hover: hover) {
+  .todo:not(:hover, :focus-within) .todoEdit {
+    opacity: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .words textarea,
+  .notes {
+    font-size: 16px;
+  }
+
+  /* A field must be this size on a phone, or iOS zooms the page. The words and the description are shown at the size they are edited at, so they don't rewrap when an edit starts. */
+  .todoText,
+  .todoNote {
+    font-size: 16px;
+  }
+
+  /* The words need the room, so the link says only whether there is one: its face is the linked project's. */
+  .todoAdd .aboutLabel {
+    display: none;
+  }
+}

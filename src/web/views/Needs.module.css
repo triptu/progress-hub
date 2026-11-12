@@ -1,0 +1,158 @@
+.muted {
+  color: var(--muted);
+}
+
+/* Something that needs the user: the one thing on a screen that gets its own ground. */
+.need {
+  /* What a card holds starts where every row's text starts: the mark column in from the edge. */
+  padding: var(--s6) calc(var(--mark) - 1px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-l);
+  background: color-mix(in oklab, var(--needs) 7%, var(--bg));
+  scroll-margin-top: var(--s4);
+}
+
+.need + .need {
+  margin-top: var(--s4);
+}
+
+.needTop {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+}
+
+.need h3 {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  font: var(--t-heading);
+}
+
+/* The dismiss button is taller than the title's line: it centres on that line without pushing the next one down. */
+.needTop :global(.icon-btn) {
+  margin: calc((1.375rem - var(--hit)) / 2) -4px;
+  margin-inline-start: 0;
+}
+
+.needSrc {
+  margin-top: 2px;
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.needSrc a:hover {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.need > :global(.prose),
+.need .ask {
+  margin-top: var(--s3);
+}
+
+.acts {
+  display: flex;
+  gap: var(--s2);
+  margin-top: var(--s4);
+}
+
+.replied,
+.ask {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-top: var(--s2);
+  color: var(--muted);
+}
+
+.need .ask {
+  color: var(--needs);
+}
+
+.replied svg,
+.ask svg {
+  width: 14px;
+  height: 14px;
+}
+
+.askText {
+  margin-top: var(--s2);
+  color: var(--text);
+}
+
+.need code {
+  background: var(--sel);
+}
+
+/* ------------------------------------------------------------------ Needs you */
+/* The reading screens hold their lines to a readable length. */
+.needsView > :not(:global(.work-head), :global(.view-head)) {
+  max-width: var(--read);
+}
+
+.leftover {
+  margin-top: var(--s12);
+}
+
+.needsView > :global(.nothing) {
+  padding-block: 0;
+}
+
+/* Nothing needs him: the good state, said plainly. */
+.allClear {
+  display: grid;
+  grid-template-columns: var(--mark) minmax(0, 1fr);
+  align-items: center;
+  /* The check stands in the mark column, like every other mark. */
+  color: var(--text);
+}
+
+.allClear svg {
+  width: 16px;
+  height: 16px;
+  margin-inline: 2px;
+  color: var(--working);
+}
+
+.leftoverHead {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  margin-block: var(--s2) var(--s4);
+}
+
+.leftoverHead p {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+}
+
+.dismissedNote {
+  margin-top: var(--s6);
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+/* Left on settled work: it may no longer matter, so it is quieter than a live ask. */
+.need.leftoverItem {
+  border-color: var(--line);
+  background: var(--raise);
+}
+
+@media (max-width: 760px) {
+  .need {
+    padding: var(--s4);
+  }
+
+  /* On a phone code has no ground anywhere, a card's included. */
+  .need code {
+    background: none;
+  }
+
+  .leftoverHead {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

@@ -1,0 +1,33 @@
+// Written by scripts/css-types.ts from the module beside it. Run `bun run css-types` after changing its classes.
+declare const classes: {
+  readonly about: string;
+  readonly aboutActive: string;
+  readonly aboutBtn: string;
+  readonly aboutCaret: string;
+  readonly aboutChoice: string;
+  readonly aboutGroup: string;
+  readonly aboutLabel: string;
+  readonly aboutMenu: string;
+  readonly aboutOpen: string;
+  readonly aboutTick: string;
+  readonly done: string;
+  readonly fields: string;
+  readonly fieldsFoot: string;
+  readonly fieldsLine: string;
+  readonly gone: string;
+  readonly moreBtn: string;
+  readonly notes: string;
+  readonly removeBtn: string;
+  readonly saveBtn: string;
+  readonly todo: string;
+  readonly todoAdd: string;
+  readonly todoCheck: string;
+  readonly todoEdit: string;
+  readonly todoNote: string;
+  readonly todoOpen: string;
+  readonly todoRemove: string;
+  readonly todoText: string;
+  readonly todos: string;
+  readonly words: string;
+};
+export default classes;
