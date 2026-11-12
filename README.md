@@ -19,7 +19,7 @@ Setup needs [Bun](https://bun.sh). It builds one program, `progress`, and puts i
 - **On macOS** it also runs the hub as a login service, so http://127.0.0.1:4747 is there after every restart.
 - **On Linux** start the hub yourself with `progress serve`. Windows is not tested.
 - **Where pages are kept.** In `~/progress`. To keep them somewhere else, run `PROGRESS_HOME=/some/folder bash setup.sh`.
-- **Optional.** With `gh` signed in, a shipped line that links a pull request shows its title and state. With Tailscale and `jq`, setup also makes the hub reachable from your phone and other machines on your tailnet.
+- **Optional.** With `gh` signed in, a shipped line that links a pull request shows its title and state. On macOS with Tailscale and `jq`, setup also makes the hub reachable from your phone and other machines on your tailnet.
 
 To look before installing, `bun install && bun run demo` serves the sample pages in `test/pages` on http://127.0.0.1:4748.
 
