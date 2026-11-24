@@ -1,0 +1,283 @@
+/*
+ * Home: every ongoing work as a card. A card says what the work is for, where it stands, what it waits on
+ * the user for, and how much it has under way. Two cards fit side by side where the screen has the room.
+ */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 26rem), 1fr));
+  gap: var(--s4);
+}
+
+.cards > li {
+  display: grid;
+}
+
+/* The tile has its own column, so every line of the card starts on one edge. */
+.card {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--avatar-m) minmax(0, 1fr);
+  gap: var(--s4);
+  align-items: start;
+  padding: var(--s6);
+  border-radius: var(--r-l);
+  background: var(--card);
+  box-shadow: var(--card-edge);
+}
+
+/* The whole card opens the work. Its edge says where the pointer or the keyboard is. */
+.card:hover {
+  background: var(--card-hover);
+  box-shadow: var(--card-edge-hover);
+}
+
+.card:has(.cardOpen:focus-visible) {
+  box-shadow: 0 0 0 2px var(--focus);
+}
+
+/* A card in a row is as tall as the tallest, and what closes each sits on one line across the row. */
+.cardMain {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+}
+
+.cardTop {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+  min-width: 0;
+}
+
+/* The dot has no baseline of its own, so it centres on the title's first line. The state's word sits on that line's baseline. */
+.cardTop :global(.unread-dot) {
+  flex: none;
+  align-self: start;
+  margin-top: calc((0.9375rem * 1.35 - 6px) / 2);
+}
+
+.cardTitle {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font: var(--t-heading);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cardTop :global(.pill) {
+  margin-inline-start: auto;
+}
+
+.cardOpen {
+  outline: none;
+}
+
+.cardOpen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-l);
+}
+
+.cardMeta {
+  overflow: hidden;
+  color: var(--muted);
+  font: var(--t-small);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* What a work is for. The word that names it is as large as what it names, and a step heavier. */
+.goalLabel {
+  margin-inline-end: var(--s2);
+  color: var(--text);
+  font-weight: var(--strong);
+}
+
+.cardGoal,
+.cardSum {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+}
+
+.cardGoal {
+  margin-top: var(--s3);
+  color: var(--text);
+  -webkit-line-clamp: 2;
+}
+
+.cardSum {
+  margin-top: var(--s2);
+  color: var(--muted);
+  -webkit-line-clamp: 3;
+}
+
+/* What the work waits on the user for, each a way to the ask itself: the sentence, with the hand that means it waits. */
+.cardAsks {
+  display: grid;
+  gap: 2px;
+  margin-top: var(--s3);
+}
+
+.cardAsk {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s2);
+  /* The hand stands on the edge the card's lines start on, and the ground under the pointer runs past it. */
+  margin-inline: calc(-1 * var(--s2));
+  padding: var(--s1) var(--s2);
+  border-radius: var(--r-m);
+  color: var(--text);
+  font-weight: var(--medium);
+}
+
+.cardAsk:hover {
+  background: var(--hover);
+}
+
+.cardAsk svg {
+  width: 14px;
+  height: 14px;
+  margin-top: 4px;
+  color: var(--needs);
+}
+
+.cardAsk span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.cardAskMore {
+  display: block;
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.cardAskMore:hover {
+  color: var(--text);
+}
+
+.cardFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  /* Side by side they sit at the card's two ends. When the places to try take a row of their own, it starts on the card's edge. */
+  justify-content: space-between;
+  gap: var(--s2) var(--s3);
+  margin-top: auto;
+  padding-top: var(--s4);
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.cardFoot:empty {
+  display: none;
+}
+
+.cardCounts,
+.cardTry {
+  position: relative;
+  z-index: 1;
+}
+
+.cardCounts:hover {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.cardTry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.card.ghost {
+  display: block;
+  height: 212px;
+}
+
+.card.ghost::before,
+.card.ghost::after {
+  content: "";
+  position: absolute;
+  inset-inline-start: var(--s6);
+  height: 8px;
+  border-radius: var(--r-s);
+  background: var(--sel);
+}
+
+.card.ghost::before {
+  top: 28px;
+  width: 38%;
+  height: 10px;
+}
+
+.card.ghost::after {
+  top: 68px;
+  width: 72%;
+}
+
+/* Settled work under the cards, for a screen with no sidebar. */
+.settled {
+  display: none;
+  margin-top: var(--s6);
+}
+
+.miniWork {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding-block: var(--s2);
+}
+
+.miniTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 760px) {
+  .settled {
+    display: block;
+  }
+
+  .cardTitle {
+    white-space: normal;
+  }
+
+  /* The tile stands beside the name alone, and every line under it has the card's whole width. */
+  .card {
+    gap: 0 var(--s3);
+    padding: var(--s4);
+  }
+
+
+  .cardMain {
+    display: contents;
+  }
+
+  .cardMain > * {
+    grid-column: 1 / -1;
+  }
+
+  .cardMain > .cardTop {
+    grid-column: 2;
+    align-self: center;
+  }
+
+  .cardMain > .cardMeta {
+    margin-top: var(--s1);
+  }
+}

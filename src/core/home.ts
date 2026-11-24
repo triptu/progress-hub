@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { appendFileSync, existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { SessionRef, WorkId } from "./types.ts";
@@ -68,6 +68,12 @@ export function readSessions(dir: string): SessionRef[] {
 export function addSession(dir: string, session: SessionRef): void {
   if (readSessions(dir).includes(session)) return;
   appendFileSync(join(dir, ".sessions"), `${session}\n`);
+}
+
+/** Takes the sessions `drop` picks off a work, such as a thread that moves to another page. */
+export function dropSessions(dir: string, drop: (session: SessionRef) => boolean): void {
+  const kept = readSessions(dir).filter((session) => !drop(session));
+  writeFileSync(join(dir, ".sessions"), kept.map((session) => `${session}\n`).join(""));
 }
 
 /** A file that is there but can't be stat-ed counts as there, so reading it fails loudly instead of the work vanishing. */

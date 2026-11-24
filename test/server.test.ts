@@ -43,9 +43,11 @@ test("the state lists the work, its Needs you item, and says T3 could not be rea
 });
 
 test("a work's page points its files at /files, with videos as players, pages in sandboxed frames and images captioned", async () => {
-  const detail = (await (await get("/api/work/alpha")).json()) as WorkDetail;
-  const item = detail.body.sections[0]?.items[0];
+  // The ask is in the hub's state, which is where every screen reads asks from. The work's own answer is its page.
+  const [item] = ((await (await get("/api/state")).json()) as HubState).needs.flatMap((need) => (need.source === "page" ? [need] : []));
   expect(item?.titleHtml as string | undefined).toBe("Pick one");
+  const detail = (await (await get("/api/work/alpha")).json()) as WorkDetail;
+  expect(detail.summary.title).toBe("Alpha");
   const html = item?.html ?? "";
   expect(html).not.toContain("Pick one");
   expect(html).toContain('<iframe sandbox="allow-scripts" src="/files/alpha/mock.html"');
@@ -121,6 +123,81 @@ test("a mark made from the hub's own page shows in the state and is kept in the 
   expect((await post({ kind: "viewed", keys: "everything", on: true }, running.url)).status).toBe(400);
   expect((await post({ kind: "viewed", keys: [pr] }, running.url)).status).toBe(400);
   expect((await marks()).viewed).toEqual(["alpha/shipped/A line."]);
+});
+
+test("a mark stays on a line an agent rewords: made before, sent under the old wording after, and unmarked for good", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "progress-reworded-"));
+  mkdirSync(join(dir, "hub"));
+  const file = join(dir, "hub", "progress.md");
+  const put = (ask: string, shipped: string, time: string) => {
+    writeFileSync(file, `Summary.\n\n## Needs you\n\n### ${ask}\n\n## Shipped\n\n- ${shipped}\n`);
+    utimesSync(file, new Date(time), new Date(time));
+  };
+  const [ask, askNow] = ["Give the deploy token R2 permission", "Give the deploy token R2 permission before the merge"];
+  const [line, lineNow] = ["The parser is in, with its tests.", "The parser is in, with all of its tests."];
+  put(ask, line, "2026-11-10T08:00:00Z");
+  let hub = serve({ home: dir, port: 0, sources: [] });
+  const post = (kind: string, keys: string[], on: boolean) => fetch(`${hub.url}/api/marks`, { method: "POST", headers: { "Content-Type": "application/json", Origin: hub.url }, body: JSON.stringify({ kind, keys, on }) });
+  const marks = async () => ((await (await fetch(`${hub.url}/api/state`)).json()) as HubState).marks;
+  await post("dismissed", [`hub:needs/${ask}`], true);
+
+  put(askNow, lineNow, "2026-11-10T09:00:00Z");
+  hub.own.refresh();
+  expect((await marks()).dismissed).toContain(`hub:needs/${askNow}`);
+
+  // Done is undone on the line as it reads now, and that holds after the hub starts again.
+  await post("dismissed", [`hub:needs/${askNow}`], false);
+  expect((await marks()).dismissed).toEqual([]);
+  hub.stop();
+  hub = serve({ home: dir, port: 0, sources: [] });
+  expect((await marks()).dismissed).toEqual([]);
+
+  // A tab still showing the old wording marks it under the old id.
+  await post("dismissed", [`hub:needs/${ask}`], true);
+  expect((await marks()).dismissed).toContain(`hub:needs/${askNow}`);
+
+  // Viewed under the second wording, and still viewed when the line goes back to its first.
+  await post("viewed", [`hub/shipped/${lineNow}`], true);
+  put(askNow, line, "2026-11-10T10:00:00Z");
+  hub.own.refresh();
+  expect((await marks()).viewed).toContain(`hub/shipped/${line}`);
+  hub.stop();
+});
+
+test("a wording back on the page belongs to the line that has it: its mark is that line's, apart from the line it was reworded into", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "progress-reused-"));
+  mkdirSync(join(dir, "hub"));
+  const file = join(dir, "hub", "progress.md");
+  const put = (asks: string[], shipped: string[], time: string) => {
+    writeFileSync(file, `Summary.\n\n## Needs you\n\n${asks.map((ask) => `### ${ask}\n`).join("\n")}\n## Shipped\n\n${shipped.map((line) => `- ${line}\n`).join("")}`);
+    utimesSync(file, new Date(time), new Date(time));
+  };
+  const [ask, askNow] = ["Give the deploy token R2 permission", "Give the deploy token R2 permission before the merge"];
+  const [line, lineNow] = ["The parser is in, with its tests.", "The parser is in, with all of its tests."];
+  put([ask], [line], "2026-11-10T08:00:00Z");
+  const hub = serve({ home: dir, port: 0, sources: [] });
+  const post = (kind: string, keys: string[], on: boolean) => fetch(`${hub.url}/api/marks`, { method: "POST", headers: { "Content-Type": "application/json", Origin: hub.url }, body: JSON.stringify({ kind, keys, on }) });
+  const marks = async () => ((await (await fetch(`${hub.url}/api/state`)).json()) as HubState).marks;
+  await post("dismissed", [`hub:needs/${ask}`], true);
+  await post("viewed", [`hub/shipped/${line}`], true);
+  put([askNow], [lineNow], "2026-11-10T09:00:00Z");
+  hub.own.refresh();
+  expect(await marks()).toEqual({ viewed: [`hub/shipped/${line}`, `hub/shipped/${lineNow}`], dismissed: [`hub:needs/${ask}`, `hub:needs/${askNow}`] });
+
+  // The old wordings come back as lines of their own: each mark is theirs now, and the reworded lines are unmarked.
+  put([askNow, ask], [lineNow, line], "2026-11-10T10:00:00Z");
+  hub.own.refresh();
+  expect(await marks()).toEqual({ viewed: [`hub/shipped/${line}`], dismissed: [`hub:needs/${ask}`] });
+
+  // Marking the reworded lines and unmarking them leaves the others marked, and so does their going away again.
+  await post("dismissed", [`hub:needs/${askNow}`], true);
+  await post("viewed", [`hub/shipped/${lineNow}`], true);
+  await post("dismissed", [`hub:needs/${askNow}`], false);
+  await post("viewed", [`hub/shipped/${lineNow}`], false);
+  put([askNow], [lineNow], "2026-11-10T11:00:00Z");
+  hub.own.refresh();
+  expect(await marks()).toEqual({ viewed: [`hub/shipped/${line}`], dismissed: [`hub:needs/${ask}`] });
+  hub.stop();
 });
 
 test("a todo is added, ticked and removed through the hub, kept in the home, and another site can't change the list", async () => {
@@ -350,14 +427,19 @@ test("what a peer sends is checked before the hub relies on it, and its addresse
   let state: unknown = {};
   const body = `<p><img src='/files/w/one.png'><img src="/files/w/two.png"><a href="/files/w/doc.pdf">doc</a> /files/ in words stays</p>`;
   const work = { id: "w", title: "W", project: null, machine: null, settled: false, lastChangeAt: "2026-11-10T09:00:00.000Z", preview: "", summary: "/files/ in a summary stays", goal: "", needsCount: 0, workingAgents: 0, agents: 0, pullRequests: { total: 0, merged: 0 }, shipped: 0, threadLink: "javascript:alert(1)", links: [{ label: "App", url: "http://localhost:3000", href: "http://localhost:3000", up: true }, { label: "Bad", url: "javascript:alert(1)", href: "javascript:alert(1)", up: null }] };
-  const good = { works: [work], needs: [], plan: [], feed: [], latestMedia: null, sources: [], health: { ok: true } };
+  const good = { works: [{ ...work, extra: "not read" }], needs: [], plan: [], feed: [], latestMedia: null, sources: [], health: { ok: true } };
+  // A finished page's event carrying the item only other kinds have: the feed would read it as one of those.
+  const done = { at: work.lastChangeAt, work: "w", workTitle: "W", project: null, event: { kind: "done", at: work.lastChangeAt, item: null }, titleHtml: null, html: null, prs: [], commits: [], important: false };
   const peer = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
     fetch(req) {
       const path = new URL(req.url).pathname;
       if (path === "/api/state") return Response.json(state);
-      if (path === "/api/work/w") return Response.json({ summary: work, body: { goal: body, summary: body, sections: [] }, agents: [], pullRequests: [], feed: [], notes: [] });
+      if (path === "/api/work/w") {
+        const shipped = { heading: "Shipped", kind: "shipped", html: "", items: [{ id: "shipped/The parser is in.", title: "The parser is in.", titleHtml: "The parser is in.", html: "", important: false, since: null, prs: [], commits: [] }] };
+        return Response.json({ summary: work, body: { goal: body, summary: body, sections: [shipped] }, agents: [], pullRequests: [], feed: [], notes: [] });
+      }
       if (path === "/api/work/empty") return Response.json({});
       if (path === "/api/media") return Response.json([null]);
       return new Response("Not found", { status: 404 });
@@ -369,8 +451,8 @@ test("what a peer sends is checked before the hub relies on it, and its addresse
     for (let tries = 0; tries < 200 && !done(); tries++) await Bun.sleep(10);
   };
   try {
-    // Answers that are JSON but not a state: an empty object, and a stalled agent with no stall. Neither is kept.
-    for (const wrong of [{}, { ...good, needs: [{ source: "stall", work: null, stall: null }, { source: "stall", work: null, stall: null }] }]) {
+    // Answers that are JSON but not a state: an empty object, a stalled agent with no stall, and an event with a field its kind does not have. None is kept.
+    for (const wrong of [{}, { ...good, needs: [{ source: "stall", work: null, stall: null }, { source: "stall", work: null, stall: null }] }, { ...good, feed: [done] }]) {
       state = wrong;
       const store = new RemoteStore(at);
       await settle(store, () => store.version > 0);
@@ -384,6 +466,8 @@ test("what a peer sends is checked before the hub relies on it, and its addresse
     // A link the browser would run is dropped, plain words that look like a path stay, and the thread link is emptied.
     expect(seen?.links.map((link) => link.label)).toEqual(["App"]);
     expect([seen?.threadLink, seen?.summary]).toEqual(["", "/files/ in a summary stays"]);
+    // What is read is built again from what was checked: a field no type has is not kept.
+    expect(seen && "extra" in seen).toBe(false);
 
     const detail = await store.detail("p~w" as WorkId);
     const html = detail?.body.goal ?? "";
@@ -392,6 +476,10 @@ test("what a peer sends is checked before the hub relies on it, and its addresse
     expect(html).toContain(`src="/files/p~w/two.png"`);
     expect(html).toContain(`href="/files/p~w/doc.pdf"`);
     expect(html).toContain("/files/ in words stays");
+    // This peer answers as a hub of an earlier build does, with no list of what shipped, which reads as none.
+    // Its work's page has its sections whole, as every build sends them, which is what the work's board is made from.
+    expect(store.state()?.shipped).toEqual([]);
+    expect(detail?.body.sections.map((section) => [section.kind, section.items.map((item) => item.title)])).toEqual([["shipped", ["The parser is in."]]]);
     expect(await store.detail("p~empty" as WorkId)).toBeNull();
     expect(await store.media()).toEqual([]);
   } finally {

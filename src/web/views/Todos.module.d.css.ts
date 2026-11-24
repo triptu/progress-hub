@@ -15,7 +15,10 @@ declare const classes: {
   readonly fieldsFoot: string;
   readonly fieldsLine: string;
   readonly gone: string;
+  readonly list: string;
+  readonly listTitle: string;
   readonly moreBtn: string;
+  readonly none: string;
   readonly notes: string;
   readonly removeBtn: string;
   readonly saveBtn: string;

@@ -37,6 +37,8 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  /* A word longer than its line, such as an address, breaks inside it. No text runs out of what holds it. */
+  overflow-wrap: break-word;
   overflow: hidden;
 }
 

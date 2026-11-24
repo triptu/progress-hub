@@ -2,41 +2,39 @@
 
 One page per task your coding agents are working on, and a hub in the browser that shows them all.
 
-![The hub with two sample tasks. Each task's goal and where it stands are on the left, with what needs you and what shipped today on the right.](docs/hub-home.png)
+![The hub's first screen with two sample tasks. Each task is a card with its goal, where it stands, what it is waiting on you for, and how much it has under way.](docs/hub-home.png)
 
 When several agents run long tasks at once, it is hard to know which one is waiting for you and what each one finished. Each agent keeps one Markdown page for its task, and the hub shows the pages together. It runs on your machine, with no account.
 
 ## What you get
 
-### What needs you
+### One board for everything
 
-![The Needs you tab with sample data. Each question is a card, with the task it came from and how long it has waited.](docs/hub-needs.png)
+![The board with sample data. Four columns hold what needs you, what is planned next, what is in progress and what shipped, each as cards that name their task.](docs/hub-board.png)
 
-This tab lists every question and blocker your agents have written down, from all tasks, with the one that has waited longest on top.
+The board has a column for what needs you, what is planned, what is in progress and what shipped, from all tasks. A dot marks a card that is new since you last looked.
 
-### What shipped
+Any column can take the board's whole width, to skim it from top to bottom. Each card is then a row with everything on it: what its page says, its pictures large, whether it is live and its pull requests. The other columns fold into its heading.
 
-![A task's Shipped tab with sample data. Lines are grouped by day, each with its pull request or commit, and three are ticked as viewed.](docs/hub-shipped.png)
+![The Shipped column given the board's whole width, with sample data. Each card is one row as wide as the board, with its text and large screenshots, and the other three columns are named beside its heading.](docs/hub-board-wide.png)
 
-This tab lists what each task finished, by day, with a link to its pull request. Tick a line once you have looked at it, and the Mark all button counts the ones you have not.
+### What shipped, and whether it is live
+
+![A shipped card opened beside the board, with sample data. It shows the screenshots the agent took, and a line that says the change is live in a release.](docs/hub-card.png)
+
+Open a card to read it in full with its pictures, and step to the next one with the arrow keys. A shipped card says whether you can try the change yet, and the hub ticks it as viewed once you have opened it.
 
 ### A task's page
 
-![A task's page with sample data. It shows the goal, where the task stands, and what shipped with pictures.](docs/hub-work.png)
+![A task's page with sample data. It opens with what is new since the last visit, then the goal and the two questions waiting for an answer.](docs/hub-work.png)
 
-The hub shows the page as the agent wrote it, with its goal, where it stands, its decisions and its pictures. An outline marks the section you are reading, and a dot shows what is new since you last opened it.
+A task's page opens with what changed since you last looked. Under that are its goal, what it needs from you, where it stands, and the rest of the page as the agent wrote it.
 
 ### Media
 
 ![The Media tab with sample data. Screenshots from one task are shown as a gallery.](docs/hub-media.png)
 
 This tab shows the screenshots, videos and pages your agents made, from every task, newest first.
-
-### Todos
-
-![The Todos tab with sample data. A new todo is being typed, and the menu that links it to a task is open.](docs/hub-todos.png)
-
-This is your own list of things to do later. Type `@` and a task's name to link a todo to it, and the todo says when that task is over.
 
 ### Light and dark
 
@@ -49,11 +47,11 @@ This is your own list of things to do later. Type `@` and a task's name to link 
 
 <p>
   <img src="docs/phone-home.png" width="30%" alt="The hub's first screen on a phone.">
-  <img src="docs/phone-needs.png" width="30%" alt="The Needs you tab on a phone.">
+  <img src="docs/phone-board.png" width="30%" alt="The board on a phone, one column at a time.">
   <img src="docs/phone-work.png" width="30%" alt="A task's page on a phone.">
 </p>
 
-On a Mac with Tailscale, setup makes the hub reachable from your phone and your other machines.
+On a Mac with Tailscale, setup makes the hub reachable from your phone and your other machines. A central hub on your own Cloudflare account can also show every machine's work at one address, behind a Google sign-in, while the machines sleep.
 
 ## Getting started
 

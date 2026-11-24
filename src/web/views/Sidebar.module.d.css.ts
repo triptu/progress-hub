@@ -15,8 +15,8 @@ declare const classes: {
   readonly sideList: string;
   readonly sideNav: string;
   readonly sideSettled: string;
+  readonly signOut: string;
   readonly stale: string;
-  readonly todosRow: string;
   readonly unread: string;
 };
 export default classes;

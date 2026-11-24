@@ -8,6 +8,7 @@ declare const classes: {
   readonly agentTitle: string;
   readonly agents: string;
   readonly ago: string;
+  readonly doneNote: string;
   readonly dot: string;
   readonly goal: string;
   readonly goalToggle: string;
@@ -16,14 +17,18 @@ declare const classes: {
   readonly notes: string;
   readonly olNew: string;
   readonly phase: string;
-  readonly refs: string;
   readonly sec: string;
   readonly secDetail: string;
   readonly secHead: string;
   readonly secLine: string;
   readonly secNote: string;
+  readonly since: string;
   readonly stated: string;
   readonly statedLabel: string;
+  readonly strip: string;
+  readonly stripCount: string;
+  readonly stripLane: string;
+  readonly stripNote: string;
   readonly workBody: string;
   readonly workGrid: string;
   readonly workProject: string;

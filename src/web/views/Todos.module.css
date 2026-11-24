@@ -3,6 +3,24 @@
  * a description and what they are about under them. A row's words are edited where they stand, in the same
  * fields the line on top adds with.
  */
+.list {
+  max-width: var(--read);
+  margin-top: var(--s16);
+  scroll-margin-top: var(--s6);
+}
+
+.listTitle {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  margin-bottom: var(--s2);
+}
+
+.none {
+  padding-block: var(--s3);
+  color: var(--muted);
+}
+
 .todoAdd {
   display: grid;
   grid-template-columns: var(--mark) minmax(0, 1fr);
@@ -191,7 +209,6 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: var(--s1);
-  border: 1px solid var(--line);
   border-radius: var(--r-l);
   background: var(--float);
   box-shadow: var(--float-shadow);
@@ -331,8 +348,13 @@
   inset: -13px;
 }
 
-.todoCheck:hover {
+.todoCheck:hover:not([role="img"]) {
   color: var(--text);
+}
+
+/* On a hub that takes no change to todos, the ring is a mark to read, not a button. */
+.todoCheck[role="img"] {
+  color: var(--muted);
 }
 
 /* What is still to do is edited with a click on its words. */

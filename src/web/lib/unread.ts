@@ -11,6 +11,8 @@ interface Seen {
 }
 
 const KEY = "progress:seen";
+/** The name the board across everything is recorded under, beside the works. No work's folder can have it. */
+export const BOARD_SEEN = "~board" as WorkId;
 const listeners = new Set<() => void>();
 
 function read(): Seen {

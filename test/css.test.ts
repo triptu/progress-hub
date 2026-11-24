@@ -69,12 +69,12 @@ test("no selector is written twice in one block of a style file", () => {
   expect(twice).toEqual([]);
 });
 
-// The hub has four type sizes, two weights and two text colours. A rule that sets its own size, weight or
+// The hub has four type sizes, three weights and two text colours. A rule that sets its own size, weight or
 // grey adds a kind of text nobody chose, which is how a screen ends up with two dozen.
 test("the styles set type only through the roles in tokens.css", () => {
   const values = (property: string) => [...allCss.matchAll(new RegExp(`(?<![\\w-])${property}:\\s*([^;]+);`, "g"))].map((match) => (match[1] ?? "").trim());
   expect([...new Set(values("font"))].sort()).toEqual(["inherit", "var(--t-body)", "var(--t-code)", "var(--t-heading)", "var(--t-small)", "var(--t-title)"]);
-  expect([...new Set(values("font-weight"))].sort()).toEqual(["400", "var(--strong)"]);
+  expect([...new Set(values("font-weight"))].sort()).toEqual(["400", "var(--medium)", "var(--strong)"]);
   // The brand's wordmark is mono. An input is 16px on a phone, or iOS zooms the page when it is tapped.
   expect(values("font-family")).toEqual(["var(--mono)"]);
   expect([...new Set(values("font-size"))]).toEqual(["16px"]);

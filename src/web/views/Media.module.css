@@ -192,7 +192,8 @@
 .viewer {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  /* Over a card open on the board. */
+  z-index: 30;
   display: grid;
   grid-template: auto minmax(0, 1fr) / minmax(0, 1fr);
   background: var(--scrim);

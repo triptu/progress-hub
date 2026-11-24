@@ -9,11 +9,6 @@
   border-color: var(--raise);
 }
 
-/* In a list of its own, a pull request is a mark row like any other. */
-:global(.rows).refs :global(.ref) {
-  grid-template-columns: var(--mark) auto minmax(0, 1fr) auto auto;
-}
-
 /* The time sits on the baseline of the line's first row of text, boxed or not. */
 .agentBody,
 .agentStatus {
@@ -28,15 +23,6 @@
   gap: var(--s2);
   grid-column: 2;
   grid-row: 1;
-}
-
-/* The work's name in its own colour: white, running into the colour its project has everywhere else. */
-.workTitle h1 {
-  width: fit-content;
-  background: linear-gradient(90deg, var(--text) 30%, color-mix(in oklab, var(--here, var(--text)) 65%, var(--text)));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
 }
 
 /*
@@ -119,36 +105,22 @@
   white-space: nowrap;
 }
 
+/* What the agent should fix on the page: the last thing on it, and quiet, since it is not the user's to do. */
 .notes {
-  /* As wide as the column it speaks about, not the outline beside it too. */
   max-width: var(--read);
-  margin-bottom: var(--s6);
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--r-m);
-}
-
-.notes summary {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  color: var(--star);
-  list-style: none;
-}
-
-.notes summary::-webkit-details-marker {
-  display: none;
-}
-
-.notes svg {
-  width: 14px;
-  height: 14px;
+  margin-top: var(--s12);
+  color: var(--muted);
+  font: var(--t-small);
 }
 
 .notes ul {
-  margin-top: var(--s2);
-  padding-inline-start: var(--s4);
+  margin-top: var(--s1);
+  padding-inline-start: calc(var(--mark) + var(--s4));
   list-style: disc;
+}
+
+.notes li + li {
+  margin-top: var(--s1);
 }
 
 .workGrid {
@@ -170,7 +142,7 @@
 .statedLabel {
   margin-bottom: var(--s1);
   color: var(--text);
-  font-weight: var(--strong);
+  font: var(--t-heading);
 }
 
 .lead {
@@ -194,8 +166,78 @@
   -webkit-line-clamp: 2;
 }
 
+/* What is new since the last visit, before anything else: it is why the work's dot was lit. It sits on the page's own edge, as every list on it does. */
+.since {
+  max-width: var(--read);
+  margin-bottom: var(--s8);
+}
+
+.since :global(.timeline) {
+  margin-top: var(--s2);
+}
+
+.doneNote {
+  margin-top: var(--s3);
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+/* How much is planned, under way and shipped: three numbers that lead to the board. */
+.strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  max-width: var(--read);
+  margin-top: var(--s6);
+}
+
+.stripLane {
+  --lane: var(--muted);
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-m);
+  background: var(--raise);
+  color: var(--muted);
+}
+
+.stripLane[data-lane="doing"] {
+  --lane: var(--accent);
+}
+
+.stripLane[data-lane="shipped"] {
+  --lane: var(--working);
+}
+
+.stripLane:hover {
+  background: var(--sel);
+}
+
+.stripLane svg {
+  align-self: center;
+  width: 14px;
+  height: 14px;
+  color: var(--lane);
+}
+
+.stripCount {
+  color: var(--text);
+  font-weight: var(--strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.stripNote {
+  font: var(--t-small);
+}
+
+.stripNote::before {
+  content: "· ";
+}
+
+/* One gap between the page's blocks, whatever kind each is. */
 .sec {
-  margin-top: var(--s16);
+  margin-top: var(--s8);
 }
 
 /* A live ask leads the page: it sits right under the heading, and the goal follows it with room. */
@@ -203,8 +245,9 @@
   margin-top: 0;
 }
 
-.sec + .stated {
-  margin-top: var(--s12);
+.sec + .stated,
+.doneNote + .stated {
+  margin-top: var(--s8);
 }
 
 /* Stays under the tabs while its section scrolls, so the reader always knows which section this is. */
@@ -260,12 +303,6 @@
 :global(.rows).agents {
   display: grid;
   gap: var(--s4);
-}
-
-/* Rows of a list are parted by space. */
-:global(.rows).refs {
-  display: grid;
-  gap: var(--s3);
 }
 
 /* The state ends where the time begins, whatever the time's width. */

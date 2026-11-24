@@ -1,5 +1,8 @@
+/* The tabs are quiet pills on the bar. With the sidebar shown, the first one's word starts on the edge a screen's name starts on. */
 .tabs {
   display: flex;
+  align-items: center;
+  gap: 2px;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
@@ -10,49 +13,42 @@
 .tab {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: var(--s2);
   flex: none;
-  padding-inline: var(--s4);
-  border-top: 2px solid transparent;
+  height: var(--hit);
+  padding-inline: var(--s3);
+  border-radius: var(--r-m);
   color: var(--muted);
+  font: var(--t-small);
+  font-weight: var(--medium);
   white-space: nowrap;
 }
 
-/* "Ongoing" on Home and "All" on a work sit in the same space, each centred in it, so the tabs after it never move. */
-.tab:first-child {
-  min-width: var(--tab-first);
-}
-
 .tab:hover {
+  background: var(--hover);
   color: var(--text);
 }
 
 /* The strip clips what sticks out of it, so the ring is drawn inside the tab. */
 .tab:focus-visible {
   outline-offset: -2px;
-  border-radius: 0;
 }
 
 .tab[aria-current="page"] {
-  /* Covers the bar's bottom line, so the open tab runs into the screen below it. */
-  margin-bottom: -1px;
-  background: var(--bg);
-  /* On a work, the open tab is in that work's colour. */
-  border-top-color: var(--here, var(--accent));
+  background: var(--sel);
   color: var(--text);
 }
 
-.tab:hover:not([aria-current="page"]) {
-  background: var(--hover);
+.tabName {
+  position: relative;
 }
 
-/* Something waits on the user. A dot, not a number: the screen itself says how many. */
+/* Something waits on the user. A dot, not a number: the screen itself says how many. It sits at the word's top corner, outside the tab's layout. */
 .tabDot {
+  position: absolute;
+  top: 1px;
+  inset-inline-start: calc(100% + 2px);
   width: 6px;
   height: 6px;
-  /* Beside the name without taking room, so the tabs never move when it comes or goes. */
-  margin-inline: calc(-1 * var(--s1)) calc(-1 * (6px + var(--s2) - var(--s1)));
   border-radius: 50%;
   background: var(--needs);
 }
@@ -68,14 +64,13 @@
   height: var(--hit);
   margin-inline-start: auto;
   padding-inline: var(--s2);
-  border: 1px solid var(--line-strong);
   border-radius: var(--r-m);
-  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line);
   color: var(--muted);
 }
 
 .search:focus-within {
-  border-color: var(--focus);
+  box-shadow: inset 0 0 0 1px var(--focus);
 }
 
 .search svg {
@@ -109,49 +104,118 @@
   margin-inline-start: var(--s1);
 }
 
+/* What empties the filter stands where its key did. */
+.searchClear {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-s);
+  color: var(--muted);
+}
+
+.searchClear:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.search .searchClear svg {
+  width: 12px;
+  height: 12px;
+}
+
 .search:focus-within kbd {
   visibility: hidden;
 }
 
-/* Only there when the hub can't read something it shows. */
-.trouble {
-  flex: none;
-  border-bottom: 1px solid var(--line);
-  background: var(--raise);
+/* What opens Devices. A dot on it says something can't be reached: orange for a fault, grey for a machine that is off. */
+.devices {
+  position: relative;
+  align-self: center;
+  margin-inline-start: var(--s2);
+}
+
+/* Open: the ground of what is open, under the pointer too. */
+.devices[aria-expanded="true"],
+.devices[aria-expanded="true"]:hover:not(:disabled) {
+  background: var(--sel);
   color: var(--text);
 }
 
-/* Its lines sit on the screen's edge, with the warning in the mark column like every other mark. */
-.troubleIn {
-  max-width: var(--page);
-  margin-inline: auto;
-  padding: var(--s2) var(--gutter);
+/* Just off the icon's corner, however large the button is around it. */
+.devicesDot {
+  position: absolute;
+  top: calc(50% - 11px);
+  inset-inline-end: calc(50% - 11px);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
 }
 
-.trouble p {
-  display: grid;
-  grid-template-columns: var(--mark) minmax(0, 1fr);
-  align-items: center;
+.devicesDot[data-status="fault"] {
+  background: var(--needs);
 }
 
-/* Only the mark is orange: the hub has a fault, and nothing waits on the user. */
-.trouble svg {
+/* What the hub says about a click it could not keep: over the screen's foot, for a few seconds, taking no room. */
+.notice {
+  position: absolute;
+  inset-inline: var(--s4);
+  bottom: var(--s6);
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.notice p {
+  display: flex;
+  gap: var(--s2);
+  max-width: 30rem;
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-l);
+  background: var(--float);
+  box-shadow: var(--float-shadow);
+  color: var(--text);
+  font: var(--t-small);
+  /* Written out: a shorthand that holds a variable keeps the keyframes' name as typed, and the build renames them. */
+  animation-name: notice-in;
+  animation-duration: var(--sheet-in);
+  animation-timing-function: var(--ease);
+}
+
+.notice svg {
+  flex: none;
   width: 14px;
   height: 14px;
-  margin-inline: 3px;
+  margin-top: 2px;
   color: var(--needs);
 }
 
-@media (max-width: 760px) {
-  .tab:first-child {
-    min-width: 0;
+@keyframes notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--s2));
   }
+}
 
+@media (prefers-reduced-motion: reduce) {
+  .notice p {
+    animation: none;
+  }
+}
+
+@media (max-width: 760px) {
   .search {
     order: 1;
     flex: 1;
     width: auto;
     margin-inline: 0;
+  }
+
+  .devices {
+    order: 1;
   }
 
   /* Its icon ends on the screen's edge, where the filter box used to. */
@@ -164,6 +228,13 @@
     display: none;
   }
 
+  /* As large as what a finger presses anywhere here, with the same small mark. */
+  .searchClear {
+    width: var(--hit);
+    height: var(--hit);
+    margin-inline-end: calc(-1 * var(--s2));
+  }
+
   .search input {
     font-size: 16px;
   }
@@ -171,13 +242,15 @@
   .tabs {
     order: 2;
     flex: 0 0 100%;
-    height: var(--tabs-h);
+    height: calc(var(--hit) + var(--s2));
+    padding-inline: var(--s1);
     border-top: 1px solid var(--line);
   }
 
-  /* Five tabs share a phone's width, each name centred in its own. */
+  /* The tabs share a phone's width, each name centred in its own. */
   .tab {
     flex: 1 0 auto;
+    justify-content: center;
     padding-inline: var(--s2);
   }
 }

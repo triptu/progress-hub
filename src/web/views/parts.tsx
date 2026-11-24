@@ -1,4 +1,4 @@
-import { Children, createContext, useContext, useMemo, useState } from "react";
+import { Children, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { ArrowSquareOutIcon, CaretRightIcon, FileHtmlIcon, GitCommitIcon, GlobeSimpleIcon, GitMergeIcon, GitPullRequestIcon, StarIcon, XCircleIcon } from "@phosphor-icons/react";
 import type { Commit, Html, Instant, OpenLink, PullRequest, WorkId, WorkSummary } from "../../core/types.ts";
@@ -61,7 +61,7 @@ export function Avatar(props: { readonly project: string | null; readonly fallba
   );
 }
 
-/** What a work is doing, as a word in a small pill. */
+/** What a work is doing, as a word in its colour. */
 export function PhasePill(props: { readonly work: WorkSummary }) {
   const phase = phaseOf(props.work);
   return <span className="pill" data-phase={phase}>{PHASE_LABEL[phase]}</span>;
@@ -154,7 +154,7 @@ export function TryLinks(props: { readonly work: WorkId; readonly links: readonl
   );
 }
 
-function PrIcon(props: { readonly state: PullRequest["state"] }) {
+export function PrIcon(props: { readonly state: PullRequest["state"] }) {
   if (props.state === "merged") return <GitMergeIcon className={s.refIcon} data-state={props.state} aria-hidden />;
   if (props.state === "closed") return <XCircleIcon className={s.refIcon} data-state={props.state} aria-hidden />;
   return <GitPullRequestIcon className={s.refIcon} data-state={props.state} aria-hidden />;
@@ -234,18 +234,42 @@ export function ListHead(props: { readonly title: string; readonly sub?: string 
   );
 }
 
-/** A long list that shows its first `show` rows, and the rest on request. Its control looks and reads like every other fold. */
-export function Fold(props: { readonly show: number; readonly noun: string; readonly className?: string; readonly children: ReactNode }) {
-  const [open, setOpen] = useState(false);
+/**
+ * A long list that shows its first `show` rows, and the rest on request. Its control looks and reads like every other fold.
+ * `reveal` is the place of a row that must be in sight, such as the one shown in full beside the list: the fold opens for it.
+ * A list that is read by scrolling is given `grow`: as its end comes near, the next `show` rows are there, and the
+ * control stays for the keyboard.
+ */
+export function Fold(props: { readonly show: number; readonly noun: string; readonly className?: string; readonly reveal?: number; readonly grow?: boolean; readonly children: ReactNode }) {
+  // How many rows past the first `show` are out.
+  const [more, setMore] = useState(0);
   const rows = Children.toArray(props.children);
-  const hidden = rows.length - props.show;
+  const past = props.reveal !== undefined && props.reveal >= props.show;
+  useEffect(() => {
+    if (past) setMore(Infinity);
+  }, [past]);
+  const folded = rows.length - props.show;
+  // One row is never left behind a control that is as tall as it.
+  const shown = past || folded <= 1 ? rows.length : Math.min(rows.length, props.show + more);
+  const hidden = rows.length - shown;
+  const control = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const button = control.current;
+    if (!props.grow || !button || hidden === 0) return;
+    // Looked for a screen ahead, inside whatever scrolls the list.
+    let root: HTMLElement | null = button.parentElement;
+    while (root && !/auto|scroll/.test(getComputedStyle(root).overflowY)) root = root.parentElement;
+    const near = new IntersectionObserver((entries) => (entries.some((entry) => entry.isIntersecting) ? setMore((had) => had + props.show) : undefined), { root, rootMargin: "0px 0px 800px 0px" });
+    near.observe(button);
+    return () => near.disconnect();
+  }, [props.grow, props.show, hidden]);
   return (
     <>
-      <ul className={props.className ?? "rows"}>{open || hidden <= 1 ? rows : rows.slice(0, props.show)}</ul>
-      {hidden > 1 ? (
-        <button type="button" className={s.foldBtn} onClick={() => setOpen(!open)} aria-expanded={open}>
+      <ul className={props.className ?? "rows"}>{rows.slice(0, shown)}</ul>
+      {folded > 1 ? (
+        <button ref={control} type="button" className={s.foldBtn} onClick={() => setMore(hidden > 0 ? Infinity : 0)} aria-expanded={hidden === 0}>
           <CaretRightIcon weight="bold" aria-hidden />
-          {open ? `Hide ${hidden} ${props.noun}` : `Show ${hidden} more ${props.noun}`}
+          {hidden > 0 ? `Show ${hidden} more ${props.noun}` : `Hide ${folded} ${props.noun}`}
         </button>
       ) : null}
     </>

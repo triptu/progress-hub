@@ -163,11 +163,13 @@ export function Viewer(props: { readonly item: MediaItem; readonly prev: MediaIt
   // The viewer is the only thing to use while it is open: the app behind it is out of reach, and whatever opened it has focus again after.
   // Read while rendering: by the time an effect runs, the viewer's own Close button has focus.
   const opener = useRef(document.activeElement);
+  const self = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const app = document.getElementById("root");
-    if (app) app.inert = true;
+    // Everything else on the page, a card open on the board included. What was already out of reach stays so after.
+    const under = [...document.body.children].filter((el): el is HTMLElement => el instanceof HTMLElement && el !== self.current && !el.inert);
+    for (const el of under) el.inert = true;
     return () => {
-      if (app) app.inert = false;
+      for (const el of under) el.inert = false;
       if (opener.current instanceof HTMLElement && opener.current.isConnected) opener.current.focus({ preventScroll: true });
     };
   }, []);
@@ -182,7 +184,7 @@ export function Viewer(props: { readonly item: MediaItem; readonly prev: MediaIt
   }, [prev, next, onMove, onClose]);
 
   return createPortal(
-    <div className={s.viewer} role="dialog" aria-modal="true" aria-label={item.label}>
+    <div ref={self} className={s.viewer} role="dialog" aria-modal="true" aria-label={item.label}>
       <header className={s.viewerHead}>
         <button type="button" className="icon-btn" onClick={onClose} aria-label="Close" autoFocus>
           <XIcon aria-hidden />

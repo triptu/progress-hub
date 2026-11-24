@@ -33,7 +33,7 @@ export interface OtherStore extends WorkStore {
 }
 
 /** What a store says: its works and everything about them, and whether it could be read. */
-export interface StoreState extends Pick<HubState, "works" | "needs" | "plan" | "feed" | "latestMedia" | "sources"> {
+export interface StoreState extends Pick<HubState, "works" | "needs" | "plan" | "shipped" | "feed" | "latestMedia" | "sources"> {
   readonly health: Health;
 }
 
@@ -77,6 +77,7 @@ export class Stores {
       works: all.flatMap((state) => state.works).sort((a, b) => (a.lastChangeAt < b.lastChangeAt ? 1 : a.lastChangeAt > b.lastChangeAt ? -1 : 0)),
       needs: all.flatMap((state) => state.needs).sort((a, b) => (since(a) < since(b) ? -1 : since(a) > since(b) ? 1 : 0)),
       plan: all.flatMap((state) => state.plan),
+      shipped: all.flatMap((state) => state.shipped),
       feed: newestFirst(all.flatMap((state) => state.feed)).slice(0, FEED_LIMIT),
       latestMedia: newestFirst(all.flatMap((state) => state.latestMedia ?? []))[0] ?? null,
       sources: all.flatMap((state) => state.sources),

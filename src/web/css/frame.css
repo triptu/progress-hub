@@ -6,15 +6,41 @@
   display: grid;
   grid-template-columns: var(--side-w) minmax(0, 1fr);
   height: 100dvh;
+  overflow: hidden;
 }
 
 .side {
   grid-area: 1 / 1;
   display: flex;
   flex-direction: column;
+  z-index: 1;
+  width: var(--side-w);
   min-height: 0;
   background: var(--side);
   border-inline-end: 1px solid var(--line);
+  /* Hidden, it slides out whole, and the screen slides over to where it stood. Both only move: nothing in either is laid out again on the way. */
+  transition: transform var(--side-move) var(--ease), visibility 0s;
+}
+
+/* The corner stands over this row: it keeps the bar's line running across the window. */
+.side-head {
+  flex: none;
+  height: var(--tabs-h);
+  border-bottom: 1px solid var(--line);
+}
+
+/* The sidebar's switch and the brand. They stay where they are when the sidebar goes, and the tabs come up beside them. */
+.corner {
+  grid-area: 1 / 1 / 2 / -1;
+  z-index: 6;
+  justify-self: start;
+  align-self: start;
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  height: var(--tabs-h);
+  /* The switch's icon stands on the edge the sidebar's rows start on. */
+  padding-inline-start: calc(var(--side-inset) - (var(--hit) - 16px) / 2);
 }
 
 .brand {
@@ -22,9 +48,6 @@
   align-items: center;
   gap: var(--s2);
   flex: none;
-  height: var(--tabs-h);
-  padding-inline: var(--side-inset);
-  border-bottom: 1px solid var(--line);
   color: var(--text);
   font: var(--t-body);
   font-family: var(--mono);
@@ -47,6 +70,7 @@
 }
 
 .main {
+  position: relative;
   grid-area: 1 / 2;
   display: flex;
   flex-direction: column;
@@ -59,12 +83,14 @@
   align-items: stretch;
   flex: none;
   height: var(--tabs-h);
-  padding-inline-end: var(--s3);
-  background: var(--side);
+  /* The first tab's word starts on the edge the screen's name starts on. */
+  padding-inline: calc(var(--gutter) - var(--s3)) var(--s3);
   border-bottom: 1px solid var(--line);
 }
 
-.topbar .brand {
+/* Written to outrank the shared icon button's own display. */
+.topbar .brand,
+.topbar .drawer-switch {
   display: none;
 }
 
@@ -82,7 +108,7 @@
 .wrap {
   max-width: var(--page);
   margin-inline: auto;
-  padding: var(--s12) var(--gutter) var(--foot);
+  padding: var(--top) var(--gutter) var(--foot);
 }
 
 .feed-grid {
@@ -98,7 +124,7 @@
 }
 
 .day + .day {
-  margin-top: var(--s16);
+  margin-top: var(--s12);
 }
 
 /* A day is a label inside its list, a step under the list's own name. */
@@ -107,7 +133,7 @@
   align-items: baseline;
   gap: var(--s2);
   color: var(--text);
-  font-weight: var(--strong);
+  font: var(--t-heading);
 }
 
 .day-head + .timeline {
@@ -141,14 +167,120 @@
   }
 }
 
+@media (min-width: 761px) {
+  .app[data-side="closed"] {
+    grid-template-columns: 0px minmax(0, 1fr);
+  }
+
+  .app[data-side="closed"] .side {
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform var(--side-move) var(--ease), visibility 0s var(--side-move);
+  }
+
+  /* The screen takes its new width at once and slides from where it stood. Only after the switch is used: a page that opens with the sidebar hidden does not slide. */
+  .app[data-side-moved][data-side="closed"] .main {
+    animation: side-hides var(--side-move) var(--ease);
+  }
+
+  .app[data-side-moved]:not([data-side="closed"]) .main {
+    animation: side-shows var(--side-move) var(--ease);
+  }
+
+  /* The bar gives the corner its room at once, and the tabs slide the difference, so the bar too is laid out once. */
+  .app[data-side-moved][data-side="closed"] .topbar > nav {
+    animation: tabs-close-up var(--side-move) var(--ease);
+  }
+
+  .app[data-side-moved]:not([data-side="closed"]) .topbar > nav {
+    animation: tabs-step-back var(--side-move) var(--ease);
+  }
+
+  .app[data-side="closed"] .topbar {
+    padding-inline-start: var(--corner);
+  }
+}
+
+@keyframes side-hides {
+  from {
+    transform: translateX(var(--side-w));
+  }
+}
+
+@keyframes side-shows {
+  from {
+    transform: translateX(calc(-1 * var(--side-w)));
+  }
+}
+
+@keyframes tabs-close-up {
+  from {
+    transform: translateX(calc(var(--gutter) - var(--s3) - var(--corner)));
+  }
+}
+
+@keyframes tabs-step-back {
+  from {
+    transform: translateX(calc(var(--corner) - var(--gutter) + var(--s3)));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side {
+    transition: none;
+  }
+
+  .side,
+  .drawer-scrim,
+  .main,
+  .topbar > nav {
+    animation: none !important;
+  }
+}
+
 @media (max-width: 760px) {
   /* No sidebar: the brand goes Home, and settled work is listed under the board. */
   .app {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .side {
+  .side,
+  .corner {
     display: none;
+  }
+
+  /* The sidebar is a drawer here: over the screen while a work is picked, and gone again. */
+  .app[data-drawer] .side {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 30;
+    display: flex;
+    width: min(20rem, 86vw);
+    /* Clear of a phone's status bar and home bar, where the page runs under them. */
+    padding-block: max(var(--s2), env(safe-area-inset-top)) env(safe-area-inset-bottom);
+    box-shadow: var(--float-shadow);
+    animation-name: drawer-in;
+    animation-duration: var(--side-move);
+    animation-timing-function: var(--ease);
+  }
+
+  .side-head {
+    display: none;
+  }
+
+  .drawer-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 29;
+    background: color-mix(in oklab, var(--scrim) 55%, transparent);
+    animation-name: drawer-fade;
+    animation-duration: var(--fast);
+  }
+
+  .topbar .drawer-switch {
+    display: inline-grid;
+    align-self: center;
+    margin-inline-start: calc(var(--gutter) - (var(--hit) - 16px) / 2);
   }
 
   .main {
@@ -164,12 +296,19 @@
   .topbar .brand {
     display: flex;
     order: 0;
-    border-bottom: 0;
-    padding-inline: var(--gutter) var(--s3);
+    padding-inline: var(--s1) var(--s3);
     height: 48px;
   }
+}
 
-  .wrap {
-    padding-top: var(--s6);
+@keyframes drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes drawer-fade {
+  from {
+    opacity: 0;
   }
 }

@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parsePage, splitItem } from "../src/core/parse.ts";
-import { goalLine } from "../src/core/text.ts";
+import { parsePage } from "../src/core/parse.ts";
+import { goalLine, liveMark, splitItem, withoutLiveMark } from "../src/core/text.ts";
 import type { Page, SectionKind } from "../src/core/types.ts";
 
 const pages = join(import.meta.dir, "pages");
@@ -35,7 +35,9 @@ test("the sync page reads as six asks, three decisions and nine shipped entries"
   const shipped = titles(page, "shipped");
   expect(shipped).toHaveLength(9);
   expect(shipped).toContain("Agent tooling now uses the newest review model.");
-  expect(page.sections.filter((s) => s.kind === null).map((s) => s.heading)).toEqual(["Running", "Ideas"]);
+  expect(titles(page, "doing")).toHaveLength(2);
+  expect(titles(page, "next")).toHaveLength(3);
+  expect(page.sections.filter((s) => s.kind === null).map((s) => s.heading)).toEqual(["Ideas"]);
   expect(page.notes).toEqual([]);
 });
 
@@ -193,4 +195,32 @@ test("the places to try a work are the links under Try it and the front matter's
   expect(page.notes.join("\n")).not.toContain("/Users/me/app/dist/index.html");
   expect(parsePage("## Running\n\nDev server: <http://127.0.0.1:3000>\n").links).toEqual([{ label: "", url: "http://127.0.0.1:3000" }]);
   expect(parsePage("## Ideas\n\n- See http://localhost:1\n").links).toEqual([]);
+});
+
+test("a Shipped item's line about being live is read as a mark, with its words, and is not part of what is under the title", () => {
+  expect(liveMark("- The cursor stays put.\n  Desktop and web.\n\n  Live: in desktop 4.18.")).toEqual({ on: true, note: "in desktop 4.18." });
+  expect(liveMark("### The cursor stays put\n\n**Not live:** the deploy is run by hand.")).toEqual({ on: false, note: "the deploy is run by hand." });
+  expect(liveMark("- The cursor stays put.\n  Not live yet: waits on the release.")?.on).toBe(false);
+  expect(liveMark("- The cursor stays put.\n  Live")).toEqual({ on: true, note: "" });
+  // The item's own first line is what shipped, and words that only begin with the mark are words.
+  expect(liveMark("- Live: the new page is up.")).toBeNull();
+  expect(liveMark("- The Live page is up.\n  Live updates arrive in a second.")).toBeNull();
+  expect(withoutLiveMark("Desktop and web.\n\nLive: in desktop 4.18.\n\n![After](a.png)")).toBe("Desktop and web.\n\n![After](a.png)");
+  // A page can show the mark as an example: code is not read, and stays as written.
+  const sample = "### The format has a live mark\n\n```md\nLive: in desktop 4.18.\n```\n\n    Live: indented code\n";
+  expect(liveMark(sample)).toBeNull();
+  expect(withoutLiveMark("```md\nLive: in desktop 4.18.\n```")).toBe("```md\nLive: in desktop 4.18.\n```");
+  // Under a heading, what is indented is code on its own too, and the item keeps it.
+  expect(liveMark("### The format has a live mark\n\n    Live: indented code")).toBeNull();
+  expect(splitItem("### The format has a live mark\n\n    Live: indented code").body).toBe("    Live: indented code");
+  expect(liveMark("- The cursor stays put.\r\n  Live: on the web.".replace(/\r\n?/g, "\n"))).toEqual({ on: true, note: "on the web." });
+});
+
+test("check says when a first line runs to a paragraph, and when Needs you says nothing and then asks", () => {
+  const long = `- ${"The index is rebuilt in place after an edit and every call site passes the changed note. ".repeat(3)}`;
+  expect(parsePage(`## Goal\n\nFast search.\n\n## In progress\n\n${long}\n`).notes.join(" ")).toContain("In progress: an item's first line runs past 160 characters");
+  expect(parsePage(`## Goal\n\nFast search.\n\n## Decisions\n\n${long}\n`).notes).toEqual([]);
+  const mixed = parsePage("## Goal\n\nFast search.\n\n## Needs you\n\nNothing right now. All seven PRs are drafts, waiting for your review.\n");
+  expect(titles(mixed, "needs")).toHaveLength(1);
+  expect(mixed.notes.join(" ")).toContain("says nothing is needed and then says more");
 });

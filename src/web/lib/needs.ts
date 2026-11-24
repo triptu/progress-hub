@@ -1,3 +1,4 @@
+import { doneKey } from "../../core/marks.ts";
 import type { Instant, NeedEntry } from "../../core/types.ts";
 
 /** An empty Needs you. While a harness can't be read, an agent stopped in it can't be seen, so this doesn't claim nothing waits. `unread` names the harnesses that can't be read. */
@@ -7,7 +8,7 @@ export function nothingWaiting(unread: readonly string[]): string {
 
 /** A stable anchor for an entry on the Needs you screen. */
 export function needKey(entry: NeedEntry): string {
-  return entry.source === "page" ? `${entry.work}:${entry.itemId}` : `stall:${entry.stall.thread}`;
+  return entry.source === "page" ? doneKey(entry.work, entry.itemId) : `stall:${entry.stall.thread}`;
 }
 
 export function needTitle(entry: NeedEntry): string {

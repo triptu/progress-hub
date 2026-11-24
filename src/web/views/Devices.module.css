@@ -1,0 +1,201 @@
+/*
+ * Devices: a dialog over the hub, with two short lists. A row is a thing by name, what is known of it under the
+ * name, and its state at the row's end as a dot and a word. Only a fault is orange. A machine that is off is grey:
+ * it is no fault, and nothing waits on the user.
+ */
+.dialog {
+  width: min(36rem, calc(100vw - 2 * var(--s4)));
+  max-height: min(44rem, calc(100dvh - 2 * var(--s4)));
+  margin: auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-l);
+  background: var(--float);
+  box-shadow: var(--float-shadow);
+  color: var(--text);
+  overflow: hidden;
+}
+
+/* Open, it is a column: its head stays, and its lists scroll under it. */
+.dialog[open] {
+  display: flex;
+  flex-direction: column;
+  /* Written out: a shorthand that holds a variable keeps the keyframes' name as typed, and the build renames them. */
+  animation-name: devices-in;
+  animation-duration: var(--sheet-in);
+  animation-timing-function: var(--ease);
+}
+
+.dialog::backdrop {
+  background: color-mix(in oklab, var(--scrim) 55%, transparent);
+}
+
+@keyframes devices-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--s2));
+  }
+}
+
+.head {
+  display: flex;
+  align-items: start;
+  gap: var(--s4);
+  flex: none;
+  padding: var(--s4) var(--s3) var(--s4) var(--s6);
+  border-bottom: 1px solid var(--line);
+}
+
+.headText {
+  flex: 1;
+  min-width: 0;
+}
+
+.head h2 {
+  font: var(--t-heading);
+}
+
+/* What can't be reached, in a sentence, where it is read first. */
+.said {
+  margin-top: 2px;
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.body {
+  min-height: 0;
+  padding: var(--s4) var(--s6) var(--s6);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.group + .group {
+  margin-top: var(--s6);
+}
+
+/* A list's name: small, as a label over rows that are names themselves. */
+.label {
+  color: var(--muted);
+  font: var(--t-small);
+  font-weight: var(--medium);
+}
+
+/* The tile has its own column, so the name and the line under it start on one edge in every row. */
+.row {
+  display: grid;
+  grid-template-columns: var(--avatar-m) minmax(0, 1fr) auto;
+  gap: var(--s1) var(--s4);
+  align-items: center;
+  padding-block: var(--s3);
+}
+
+.row + .row {
+  border-top: 1px solid var(--line);
+}
+
+.text {
+  min-width: 0;
+}
+
+.name {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 var(--s2);
+  color: var(--text);
+  font-weight: var(--medium);
+  overflow-wrap: anywhere;
+}
+
+/* Two machines with one name are told apart by their ids. */
+.id {
+  color: var(--muted);
+  font: var(--t-code);
+}
+
+/* What the machine is to this hub, beside its name. */
+.tag {
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.sub {
+  color: var(--muted);
+  font: var(--t-small);
+  overflow-wrap: anywhere;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--muted);
+  font: var(--t-small);
+  font-weight: var(--medium);
+  white-space: nowrap;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--working);
+}
+
+/* Off: a ring, so it differs from the others by its shape too. */
+.status[data-status="quiet"] .dot {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--faint);
+}
+
+.status[data-status="fault"] {
+  color: var(--needs);
+}
+
+.status[data-status="fault"] .dot {
+  background: var(--needs);
+}
+
+.none {
+  color: var(--muted);
+}
+
+@media (max-width: 760px) {
+  /*
+   * A fault's state goes right under the name it is about, before what the hub was told, and the icon stands by the
+   * name. The row's lines become the grid's own, so the state can take its place among them.
+   */
+  .row:has(.status[data-status="fault"]) {
+    align-items: start;
+  }
+
+  .row:has(.status[data-status="fault"]) .text {
+    display: contents;
+  }
+
+  /* Beside all of them, so its height is not the first line's. */
+  .row:has(.status[data-status="fault"]) > :global(.avatar) {
+    grid-row: 1 / span 4;
+  }
+
+  .row:has(.status[data-status="fault"]) .text > * {
+    grid-column: 2 / -1;
+    order: 2;
+  }
+
+  .row:has(.status[data-status="fault"]) .name {
+    order: 0;
+  }
+
+  .status[data-status="fault"] {
+    grid-column: 2 / -1;
+    order: 1;
+    white-space: normal;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog[open] {
+    animation: none;
+  }
+}

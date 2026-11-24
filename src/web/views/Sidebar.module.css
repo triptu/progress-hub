@@ -13,19 +13,16 @@
   grid-template-columns: var(--avatar-s) minmax(0, 1fr) auto;
   column-gap: var(--s3);
   align-items: center;
+  /* Home's one line is as tall as its tile and the room round it. */
+  min-height: calc(var(--avatar-s) + var(--s3));
   margin-inline: var(--s2);
-  padding: var(--s2) calc(var(--side-inset) - var(--s2));
+  padding-inline: calc(var(--side-inset) - var(--s2));
   border-radius: var(--r-m);
 }
 
 .homeRow {
   flex: none;
   margin-top: var(--s2);
-}
-
-/* The user's own list sits right under Home, as close to it as one work's row is to the next. */
-.todosRow {
-  margin-top: 2px;
 }
 
 /* Home has a tile like every work under it, so the icons form one column. */
@@ -104,6 +101,13 @@ button.sideLabel:focus-visible {
   border-top: 1px solid var(--line);
 }
 
+/* Signing out sits under everything, apart from the work. */
+.signOut {
+  flex: none;
+  padding-block: var(--s1) var(--s2);
+  border-top: 1px solid var(--line);
+}
+
 .sideSettled.open {
   padding-bottom: var(--s2);
 }
@@ -114,7 +118,7 @@ button.sideLabel:focus-visible {
   overscroll-behavior: contain;
 }
 
-/* The tile is centred on both lines. */
+/* A work's row has two lines: its name, which has the row's whole width, then its project and when it last changed. The tile is centred on both. */
 .row {
   grid-template-rows: auto auto;
   align-content: center;
@@ -131,7 +135,6 @@ button.sideLabel:focus-visible {
 .row.dense {
   grid-template-rows: auto;
   min-height: 28px;
-  padding-block: 2px;
   font: var(--t-small);
 }
 
@@ -147,9 +150,18 @@ button.sideLabel:focus-visible {
   text-overflow: ellipsis;
 }
 
-/* With a project under it, the name has the whole first line, and the time sits on the project's line and baseline. */
-.row:has(.rowSub) .rowTitle {
+/* The name has the whole first line, and the time sits on the project's line and baseline. */
+.row:not(.dense) .rowTitle {
   grid-column: 2 / 4;
+}
+
+.rowSub {
+  grid-column: 2;
+  overflow: hidden;
+  color: var(--muted);
+  font: var(--t-small);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .row[aria-current="page"] .rowTitle {
@@ -162,15 +174,6 @@ button.sideLabel:focus-visible {
 
 .row.stale:not([aria-current="page"]) .rowTitle {
   color: var(--muted);
-}
-
-.rowSub {
-  grid-column: 2;
-  overflow: hidden;
-  color: var(--muted);
-  font: var(--t-small);
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 .rowEnd {
@@ -201,13 +204,13 @@ button.sideLabel:focus-visible {
 }
 
 .row.ghost::before {
-  top: 14px;
+  top: calc(50% - 12px);
   width: 55%;
 }
 
 .row.ghost::after {
-  top: 30px;
-  width: 75%;
+  top: calc(50% + 4px);
+  width: 35%;
 }
 
 .resizer {
@@ -243,7 +246,7 @@ button.sideLabel:focus-visible {
 
 /* The dot's ring is the colour of what it sits on. */
 .row[aria-current="page"] :global(.avatar-dot) {
-  border-color: var(--sel);
+  border-color: color-mix(in oklab, var(--ink) var(--sel-share), var(--side));
 }
 
 @media (max-width: 760px) {

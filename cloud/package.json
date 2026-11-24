@@ -1,0 +1,24 @@
+{
+  "name": "progress-central",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "bun deploy.ts",
+    "credential": "bun credential.ts",
+    "machines": "bun machines.ts",
+    "forget": "bun forget.ts",
+    "check": "tsc --noEmit -p ."
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261009.1",
+    "@effect/platform-bun": "4.0.0",
+    "@effect/platform-node": "4.0.0",
+    "@types/bun": "1.4.4",
+    "alchemy": "2.0.0-beta.81",
+    "effect": "4.0.0",
+    "typescript": "5.9.3"
+  },
+  "overrides": {
+    "@effect/platform-node-shared": "4.0.2"
+  }
+}

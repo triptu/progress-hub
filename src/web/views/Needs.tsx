@@ -1,130 +1,60 @@
-import type { ReactNode } from "react";
-import { CaretRightIcon, ChatCircleDotsIcon, CheckCircleIcon, QuestionIcon, ShieldCheckIcon, XIcon } from "@phosphor-icons/react";
+import { ChatCircleDotsIcon, CheckIcon, QuestionIcon, ShieldCheckIcon } from "@phosphor-icons/react";
+import { LONG_TITLE } from "../../core/text.ts";
 import type { NeedEntry, Stall } from "../../core/types.ts";
-import type { Dismissed } from "../lib/dismissed.ts";
-import { needKey, needSince, nothingWaiting } from "../lib/needs.ts";
-import { routeHref } from "../lib/route.ts";
-import { plural } from "../lib/works.ts";
-import { Ago, Important, InlineHtml, Link, ListHead, RichHtml, ThreadButton } from "./parts.tsx";
+import { needKey, needSince } from "../lib/needs.ts";
+import { Ago, Important, InlineHtml, RichHtml, ThreadButton } from "./parts.tsx";
 import s from "./Needs.module.css";
 
-interface NeedsProps {
-  /** On ongoing work, oldest first. */
-  readonly needs: readonly NeedEntry[];
-  /** Still written on the page of work that is over. These can be dismissed. */
-  readonly settled: readonly NeedEntry[];
-  readonly dismissed: Dismissed;
-  /** Every card is from the open work, so none says which work it is from. */
-  readonly scoped: boolean;
-  readonly query: string;
-  /** The harnesses that can't be read now, by name. */
-  readonly unread: readonly string[];
-  /** On Home, what the list covers. */
-  readonly sub?: string;
-  /** What sits above the list on a work: the work's head and goal. */
-  readonly children?: ReactNode;
-  readonly now: number;
-}
-
-export function Needs(props: NeedsProps) {
-  const { needs, dismissed } = props;
-  const left = props.settled.filter((entry) => !dismissed.has(needKey(entry)));
-  const gone = props.settled.filter((entry) => dismissed.has(needKey(entry)));
-  return (
-    <div className={`wrap ${s.needsView}`}>
-      {props.children}
-      <ListHead title="Needs you" sub={props.sub} scoped={props.scoped} />
-      {needs.map((entry) => (
-        <NeedCard key={needKey(entry)} entry={entry} scoped={props.scoped} now={props.now} />
-      ))}
-      {needs.length ? null : props.query ? (
-        <p className="nothing">Nothing matches “{props.query}”.</p>
-      ) : (
-        <p className={s.allClear}>
-          <CheckCircleIcon weight="fill" aria-hidden />
-          {nothingWaiting(props.unread)}
-        </p>
-      )}
-      {left.length ? (
-        // What settled work still lists may no longer matter, so it stays folded where live asks are read. On the work's own tab it is all there is.
-        <details className={`fold ${s.leftover}`} open={props.scoped}>
-          <summary>
-            <CaretRightIcon weight="bold" aria-hidden />
-            <span className="when-closed">Show {left.length} left on settled work</span>
-            <span className="when-open">Hide {left.length} left on settled work</span>
-          </summary>
-          <div className={s.leftoverHead}>
-            <p>Still on pages you settled. Dismiss what's done.</p>
-            <button type="button" className="btn" onClick={() => dismissed.dismiss(left.map(needKey))}>
-              Dismiss all {left.length}
-            </button>
-          </div>
-          {left.map((entry) => (
-            <NeedCard key={needKey(entry)} entry={entry} scoped={props.scoped} onDismiss={() => dismissed.dismiss([needKey(entry)])} now={props.now} />
-          ))}
-        </details>
-      ) : null}
-      {gone.length ? (
-        <p className={s.dismissedNote}>
-          {plural(gone.length, "dismissed item")} hidden.{" "}
-          <button type="button" className="more" onClick={() => dismissed.restore(gone.map(needKey))}>
-            Show again
-          </button>
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-/** One thing that needs the user, drawn the same on the Needs you tab and on a work's page. */
-export function NeedCard(props: { readonly entry: NeedEntry; readonly scoped: boolean; readonly onDismiss?: (() => void) | undefined; readonly now: number }) {
+/**
+ * One thing that needs the user, in full, on a work's Home. `quiet` is for what settled work still lists,
+ * which may no longer matter. Marking it done takes it off the user's lists and leaves the page as it is.
+ */
+export function NeedCard(props: { readonly entry: NeedEntry; readonly quiet?: boolean; readonly onDone: () => void; readonly now: number }) {
   const { entry } = props;
   const stalled = entry.source === "stall";
   return (
-    <article className={`${s.need}${stalled ? " stalled" : ""}${props.onDismiss ? ` ${s.leftoverItem}` : ""}`} id={needKey(entry)}>
-      <div className={s.needTop}>
-        <h3>
-          {entry.source === "page" && entry.important ? <Important /> : null}
-          {entry.source === "page" ? <InlineHtml html={entry.titleHtml} /> : entry.agentTitle}
-        </h3>
-        {props.onDismiss ? (
-          <button type="button" className="icon-btn" onClick={props.onDismiss} aria-label="Dismiss" title="Dismiss">
-            <XIcon aria-hidden />
-          </button>
-        ) : null}
-      </div>
+    <article className={`${s.need}${stalled ? " stalled" : ""}`} data-quiet={props.quiet || undefined} id={needKey(entry)}>
+      {/* An ask written as one paragraph is read as one, not shouted as a heading. */}
+      <h3 data-long={(entry.source === "page" && entry.title.length > LONG_TITLE) || undefined}>
+        {entry.source === "page" && entry.important ? <Important /> : null}
+        {entry.source === "page" ? <InlineHtml html={entry.titleHtml} /> : entry.agentTitle}
+      </h3>
       <p className={s.needSrc}>
-        {props.scoped || !entry.work ? null : (
-          <>
-            <Link href={routeHref({ work: entry.work, tab: "needs" })}>{entry.workTitle}</Link>
-            {" · "}
-          </>
-        )}
         <Ago verb={stalled ? "stopped" : "added"} at={needSince(entry)} now={props.now} />
       </p>
-      {entry.source === "page" ? (
-        <>
-          <RichHtml html={entry.html} />
-          {entry.repliedSince ? (
-            <p className={s.replied}>
-              <ChatCircleDotsIcon aria-hidden />
-              You've written in the thread since, so this may be settled.
-            </p>
-          ) : null}
-          <div className={s.acts}>
-            <ThreadButton href={entry.threadLink} label="Answer in thread" />
-          </div>
-        </>
-      ) : (
-        <>
-          <StallBody stall={entry.stall} />
-          <div className={s.acts}>
-            <ThreadButton href={entry.threadLink} label={entry.stall.ask === "approval" ? "Allow or deny in thread" : "Answer in thread"} />
-          </div>
-        </>
-      )}
+      <AskBody entry={entry} />
+      <div className={s.acts}>
+        <AskThread entry={entry} />
+        <button type="button" className="btn" title="It leaves your lists. The page is not changed." onClick={props.onDone}>
+          <CheckIcon aria-hidden />
+          Mark done
+        </button>
+      </div>
     </article>
   );
+}
+
+/** An ask in full, under its title: what its page wrote, or what a stalled agent waits on. The board's open card and a work's Home both show this. */
+export function AskBody(props: { readonly entry: NeedEntry }) {
+  const { entry } = props;
+  if (entry.source === "stall") return <StallBody stall={entry.stall} />;
+  return (
+    <>
+      <RichHtml html={entry.html} />
+      {entry.repliedSince ? (
+        <p className={s.replied}>
+          <ChatCircleDotsIcon aria-hidden />
+          You've written in the thread since, so this may be settled.
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+/** The way to answer an ask: its agent's thread, named for what is asked there. */
+export function AskThread(props: { readonly entry: NeedEntry }) {
+  const { entry } = props;
+  return <ThreadButton href={entry.threadLink} label={entry.source === "stall" && entry.stall.ask === "approval" ? "Allow or deny in thread" : "Answer in thread"} />;
 }
 
 /** What a stalled agent waits on, with the question or command in full. */

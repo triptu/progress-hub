@@ -34,6 +34,7 @@ function refresh(path: string): Promise<void> {
   }
   const request = fetch(path)
     .then(async (response) => {
+      if (response.status === 401) signedOut();
       if (!response.ok) throw new Error(`${path}: ${response.status}`);
       const raw = await response.text();
       const changed = entries.get(path)?.raw !== raw;
@@ -60,6 +61,22 @@ function refresh(path: string): Promise<void> {
   return request;
 }
 
+/**
+ * The hub is behind a sign-in and this browser's session has ended: nothing it answered stays, in memory or in
+ * the tab's storage, and a reload shows its sign-in page.
+ */
+function signedOut(): void {
+  entries.clear();
+  fetched.clear();
+  try {
+    sessionStorage.removeItem(KEPT);
+  } catch {
+    // No storage.
+  }
+  emit();
+  location.reload();
+}
+
 function subscribe(listener: () => void) {
   listeners.add(listener);
   return () => listeners.delete(listener);
@@ -80,6 +97,15 @@ function useResource<T>(path: string | null): T | null {
 }
 
 export const useHub = () => useResource<HubState>("/api/state");
+
+/**
+ * Whether this hub takes a change to the todos. A hub that takes none, such as a central one, says so in its state,
+ * and the app then offers no control that would make one. This is the one place the app reads that.
+ */
+export const useTodosWritable = () => useHub()?.todosReadOnly !== true;
+
+/** Whether this hub is behind a sign-in, so the app offers a way to sign out. */
+export const useSignedIn = () => useHub()?.signedIn === true;
 
 /**
  * Fetches what the first screen shows before anything is drawn, so it is drawn once, whole, with nothing
@@ -106,6 +132,8 @@ const KEPT = "progress:on-screen";
 export function takeOver(paths: readonly string[]): boolean {
   const app = scriptOf(document.documentElement.outerHTML);
   addEventListener("pagehide", () => {
+    // A hub behind a sign-in keeps its answers to the browser's session, never in the tab's storage.
+    if ((entries.get("/api/state")?.value as HubState | undefined)?.signedIn) return;
     try {
       sessionStorage.setItem(KEPT, JSON.stringify({ app, raw: Object.fromEntries([...watched.keys()].filter((path) => fetched.has(path)).map((path) => [path, entries.get(path)?.raw])) }));
     } catch {

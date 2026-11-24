@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { CheckCircleIcon, CircleIcon } from "@phosphor-icons/react";
 import type { Commit, Html, Instant, PullRequest } from "../../core/types.ts";
 import type { Weight } from "../lib/feed.ts";
+import type { Viewed } from "../lib/marks.ts";
 import { sanitize, withoutLeadingRef, withoutTrailingCommits } from "../lib/html.ts";
 import { Avatar, Important, Link, RefChips, RichHtml, useProjectColour, When } from "./parts.tsx";
 import s from "./Entry.module.css";
@@ -23,15 +24,15 @@ export interface EntryProps {
   readonly commits?: readonly Commit[];
   /** The page marked the line as one not to miss. */
   readonly important?: boolean;
-  /** New since the user last had the page open. */
-  readonly fresh?: boolean;
+  /** New, or edited, since the user last had the page open. */
+  readonly fresh?: "new" | "edited" | null;
   readonly at: Instant | null;
   /** The line above shows the same time, so this one leaves it out and a burst reads as one moment. */
   readonly sameTime?: boolean;
   /** Where the line is from, on a screen that holds more than one work: the work's name, its project's face and the way to it. */
   readonly from?: { readonly title: string; readonly project: string; readonly href: string } | undefined;
   /** For something that shipped: whether the user marked it as looked at, and the click that changes that. */
-  readonly viewed?: { readonly on: boolean; readonly set: (on: boolean) => void } | undefined;
+  readonly viewed?: Viewed | undefined;
   readonly now: number;
   readonly children?: ReactNode;
 }
@@ -48,7 +49,7 @@ export function Entry(props: EntryProps) {
   const viewed = props.viewed;
   const colour = useProjectColour(props.from?.project ?? "");
   return (
-    <li style={props.from ? colour : undefined} className={`${s.tl}${props.fresh ? ` ${s.fresh}` : ""}${props.from ? ` ${s.from}` : ""}${viewed?.on ? ` ${s.viewed}` : ""}`} data-weight={props.weight} data-kind={props.kind} title={props.fresh ? "New since you last looked" : undefined}>
+    <li style={props.from ? colour : undefined} className={`${s.tl}${props.fresh ? ` ${s.fresh}` : ""}${props.from ? ` ${s.from}` : ""}${viewed?.on ? ` ${s.viewed}` : ""}`} data-weight={props.weight} data-kind={props.kind} title={props.fresh ? `${props.fresh === "new" ? "New" : "Edited"} since you last looked` : undefined}>
       <span className={s.tlDot} aria-hidden />
       <div className={s.tlBody}>
         {props.from ? (
@@ -68,7 +69,7 @@ export function Entry(props: EntryProps) {
       </div>
       {props.at ? <When at={props.at} now={props.now} className={`${s.stamp}${props.sameTime ? ` ${s.same}` : ""}`} /> : null}
       {viewed ? (
-        <button type="button" className={s.tlView} aria-pressed={viewed.on} aria-label="Viewed" title={viewed.on ? "Viewed. Click to mark as not viewed." : "Mark as viewed"} onClick={() => viewed.set(!viewed.on)}>
+        <button type="button" className={s.tlView} aria-pressed={viewed.on} aria-label="Viewed" title={viewed.on ? "Viewed. Click to mark as not viewed." : "Mark viewed"} onClick={() => viewed.set(!viewed.on)}>
           {viewed.on ? <CheckCircleIcon weight="fill" aria-hidden /> : <CircleIcon aria-hidden />}
         </button>
       ) : null}

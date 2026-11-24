@@ -1,8 +1,9 @@
 import { useRef } from "react";
 import type { KeyboardEvent, PointerEvent } from "react";
-import { CaretDownIcon, CaretRightIcon, HouseIcon, ListChecksIcon } from "@phosphor-icons/react";
+import { CaretDownIcon, CaretRightIcon, HouseIcon } from "@phosphor-icons/react";
 import type { WorkId, WorkSummary } from "../../core/types.ts";
 import { routeHref, useRoute } from "../lib/route.ts";
+import { useSignedIn } from "../lib/store.ts";
 import { phaseOf } from "../lib/works.ts";
 import { Avatar, Link, When } from "./parts.tsx";
 import s from "./Sidebar.module.css";
@@ -15,57 +16,42 @@ interface SidebarProps {
   readonly settled: readonly WorkSummary[];
   /** Any work is settled, whether or not the filter shows it. */
   readonly hasSettled: boolean;
+  /** Hidden by its switch: still there, slid out of the window, and nothing in it takes focus. */
+  readonly shown: boolean;
   /** The open work, or null on Home. */
   readonly current: WorkId | null;
   readonly searching: boolean;
   readonly isUnread: (work: WorkSummary) => boolean;
   /** How many things need the user across ongoing work, shown on Home. */
   readonly needs: number;
-  /** How many of the user's todos are still to do, shown on Todos. */
-  readonly todos: number;
   readonly settledOpen: boolean;
   readonly onSettledOpen: (open: boolean) => void;
   readonly now: number;
 }
 
-/** Home on top, ongoing work under it, and settled work folded away at the bottom. */
+/** Everything on top, ongoing work under it, and settled work folded away at the bottom. */
 export function Sidebar(props: SidebarProps) {
   const { ongoing, settled } = props;
-  const holdsCurrent = settled.some((work) => work.id === props.current);
-  // A search and the open work both show through the fold.
-  const settledOpen = props.settledOpen || props.searching || holdsCurrent;
+  // A search opens the fold on what it found. Folded, the fold still shows the open work, alone, so the user sees where they are and can fold the rest away.
+  const settledOpen = props.settledOpen || props.searching;
+  const settledShown = settledOpen ? settled : settled.filter((work) => work.id === props.current);
   const { tab } = useRoute();
-  // The user's whole list has a row of its own under Home, so it is one click from anywhere.
-  const onTodos = props.current === null && tab === "todos";
-  const onHome = props.current === null && !onTodos;
-  // Moving between Home and a work keeps the tab that is open. From Todos, Home is Home's first tab, since Todos has its own row.
-  const home = routeHref({ work: null, tab: tab === "todos" ? "main" : tab });
+  const onHome = props.current === null;
+  // Moving between everything and a work keeps the tab that is open.
+  const home = routeHref({ work: null, tab });
+  const signedIn = useSignedIn();
   return (
-    <aside className="side">
-      <Link href={home} className="brand">
-        <span className="brand-mark" aria-hidden />
-        progress
-      </Link>
+    <aside className="side" id="side" inert={!props.shown}>
+      <div className="side-head" />
       <nav className={s.sideNav} aria-label="Work">
         <Link href={home} className={s.homeRow} current={onHome}>
           <span className={`avatar ${s.home}`} data-size="s">
             <HouseIcon weight={onHome ? "fill" : "regular"} aria-hidden />
           </span>
-          <span className={s.rowTitle}>Home</span>
+          <span className={s.rowTitle}>Everything</span>
           {props.needs > 0 ? (
             <span className="n" title={`${props.needs} ${props.needs === 1 ? "needs" : "need"} you`}>
               {props.needs}
-            </span>
-          ) : null}
-        </Link>
-        <Link href={routeHref({ work: null, tab: "todos" })} className={`${s.homeRow} ${s.todosRow}`} current={onTodos}>
-          <span className={`avatar ${s.home}`} data-size="s">
-            <ListChecksIcon weight={onTodos ? "bold" : "regular"} aria-hidden />
-          </span>
-          <span className={s.rowTitle}>Todos</span>
-          {props.todos > 0 ? (
-            <span className="n" title={`${props.todos} still to do`}>
-              {props.todos}
             </span>
           ) : null}
         </Link>
@@ -87,16 +73,24 @@ export function Sidebar(props: SidebarProps) {
           )}
         </div>
         {props.hasSettled ? (
-          <section className={`${s.sideSettled}${settledOpen ? ` ${s.open}` : ""}`}>
+          <section className={`${s.sideSettled}${settledShown.length > 0 ? ` ${s.open}` : ""}`}>
             <button type="button" className={s.sideLabel} aria-expanded={settledOpen} onClick={() => props.onSettledOpen(!props.settledOpen)}>
               <span>Settled</span>
               {settledOpen ? <CaretDownIcon weight="bold" aria-hidden /> : <CaretRightIcon weight="bold" aria-hidden />}
               <span className="n">{settled.length}</span>
             </button>
-            {settledOpen ? <Rows works={settled} dense {...props} /> : null}
+            {settledShown.length > 0 ? <Rows works={settledShown} dense {...props} /> : null}
           </section>
         ) : null}
       </nav>
+      {/* A hub behind a sign-in, such as a central one, can be left. The hub answers with its sign-in page. */}
+      {signedIn ? (
+        <form method="post" action="/auth/signout" className={s.signOut}>
+          <button type="submit" className={s.sideLabel}>
+            Sign out
+          </button>
+        </form>
+      ) : null}
     </aside>
   );
 }

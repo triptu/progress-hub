@@ -1,6 +1,6 @@
 # Progress page format
 
-Each piece of work keeps one folder in the progress home, with one Markdown file in it. `setup.sh` chooses the home on each machine (`~/progress` unless you set `PROGRESS_HOME`), and `progress new` prints the page's path. The hub draws that file as the work's page and builds the shared views (Needs you, the feed) from it.
+Each piece of work keeps one folder in the progress home, with one Markdown file in it. `setup.sh` chooses the home on each machine (`~/progress` unless you set `PROGRESS_HOME`), and `progress new` prints the page's path. The hub draws that file as the work's page and builds the shared views (the board, the feed) from it.
 
 ```
 <progress home>/<work>/
@@ -43,12 +43,18 @@ What the choice is, the options, your pick and what would change it.
 ## Shipped
 
 - ! https://github.com/acme/kestrel/pull/412 Package builds went from 3.4 s to 2.2 s.
+  Measured on CI, ten runs each.
+
+  Live: in desktop 4.18.
+- https://github.com/acme/kestrel/pull/415 The admin page lists failed jobs.
+
+  Not live: the admin deploy is run by hand. Say go and I will run it.
 - https://github.com/acme/kestrel/commit/daa36b6 The lint config is one file.
-- The Mac app is reinstalled from main.
 
 ## In progress
 
-- Moving the desktop app to the new index.
+- https://github.com/acme/kestrel/pull/418 Moving the desktop app to the new index.
+  Two of nine tests still fail on Windows.
 
 ## Next
 
@@ -65,17 +71,23 @@ Anything else is freeform: Ideas, a table of measurements, a gallery of screens.
 1. **Front matter.** `title` (else the first `#` heading, else the folder name), `project` and `status: done` when the work is finished. All optional. Each value is the rest of its line, as written.
 2. **The summary.** The text between the front matter and the first heading. When it changes, its first sentence goes to the feed as the work's status.
 3. **The goal.** A `## Goal` section: what this work is for, zoomed out, in a line or two or a few bullets. The hub shows it at the top of the work's page, on its other tabs and on Home, so the user gets the context before the detail. It is the user's goal in plain words, not a task list, and it changes only when the aim does. A summary paragraph that starts with `Goal:` counts too. `progress check` says when a page has none.
-4. **Five sections**, found by their name as whole words at the start of a `#` or `##` heading, in any letter case: `Needs you`, `In progress` (or `In review`, `Doing`), `Next` (or `Up next`, `To do`, `Planned`), `Decisions` (or `Decision log`) and `Shipped`. So `Shipped today` is Shipped, and `Needs your eyes later` is a freeform section. In progress, Next and Shipped are the three states of the work, each with its own tab: move a line from one to the next as the work moves.
+4. **Five sections**, found by their name as whole words at the start of a `#` or `##` heading, in any letter case: `Needs you`, `In progress` (or `In review`, `Doing`), `Next` (or `Up next`, `To do`, `Planned`), `Decisions` (or `Decision log`) and `Shipped`. So `Shipped today` is Shipped, and `Needs your eyes later` is a freeform section. Next, In progress and Shipped are the three states of the work, each a lane of its board beside Needs you: move a line from one to the next as the work moves.
 5. **Items** in those sections. Each `###` block is one item. With no `###` blocks, each top-level bullet is one item. Text above the first item is an introduction and is not an item. In Needs you, In progress and Next, a ticked box (`- [x]`) is done and is not an item.
-6. **Needs you with no open items.** Its prose counts as one item, even beside ticked boxes, so a blocker written as a paragraph is not missed. Prose that ends in a colon introduces the list under it and is not an item. When nothing needs the user, leave the section empty or write "Nothing right now.".
 
-7. **Important items.** An item whose title starts with `!` and a space is one the user should not miss: `- ! Sync no longer loses edits.` or `### ! Pick a region`. The hub shows it larger and starred in the feed and on the page, and the feed's Important switch keeps only these and what needs the user. The mark is not part of the title, and a line that swaps its bullet for the mark (`! text`) is read the same. Use it for the few things worth a skim; when every line has it, none stands out.
+   **An item's first line is its name.** The board shows it as the item's card, so write it as one sentence that says what the item is, in under about 100 characters, and put everything else on the lines under it: numbers, limits, pictures. What it waits on and where it stands ("in review", "waiting on the deploy") go under the line too, never in it: the line is the item's name, and it outlives its state. When the item moves on, change what is under it as well: a line under it that says "in review" goes to Shipped as it is. Nor does a line open with a date: the hub records when each line appeared. The hub also knows an item by that line. A line reworded a little stays the same item, but one that says something else is a new item, which the user sees as something new. Change the lines under it instead, and keep the first line as it is.
+6. **Needs you with no open items.** Its prose counts as one item, even beside ticked boxes, so a blocker written as a paragraph is not missed. Prose that ends in a colon introduces the list under it and is not an item. When nothing needs the user, leave the section empty or write "Nothing right now." and nothing after it: with more after it, it is shown as an ask.
 
-An item is known by its title, so changing the title makes it a new item with a new time.
+7. **Important items.** An item whose title starts with `!` and a space is one the user should not miss: `- ! Sync no longer loses edits.` or `### ! Pick a region`. The hub stars it on its card and in the feed, and the feed's Important switch keeps only these and what needs the user. The mark is not part of the title, and a line that swaps its bullet for the mark (`! text`) is read the same. Use it for the few things worth a skim; when every line has it, none stands out.
 
-Remove a Needs you item the moment it is settled, and write the outcome under Decisions. Add new Decisions and Shipped entries at the top.
+An item is known by its title. A title reworded in one save, keeping most of its words and not naming other links, numbers like `#123` or commits in their place, is the same item: it keeps its time and what the user marked on it. Any other change to the title makes a new item with a new time. `progress reword` is the way to change one further: a line it rewords is the same item, however little of it stays.
+
+**Needs you** is for what only the user can do. Name the item for the thing to do, and under it give the exact step and a direct link to where it is done, so they never have to ask how. Remove an item the moment it is settled, and write the outcome under Decisions. The user can also mark an item done in the hub, which takes it off their lists and leaves the page as it is: `progress check` then names it, and you take it off the page.
+
+Add new Decisions and Shipped entries at the top.
 
 A Shipped line with a pull request or commit link is shown with its title and state. Write the full link, not a bare `#number`.
+
+**Live.** Shipped means the work is done and merged. Whether the user can try it yet is a separate fact, and they should never have to ask. Under a Shipped item, on a line of its own, write `Live:` and where it is, once it is where they would use it: deployed, released, installed, or simply on main where that is all there is to it. While it has merged and is not there yet, write `Not live:` and what it waits on. When going live takes a step you can run, such as a deploy, run it. When only the user can take the step, it is also a Needs you item. Change `Not live:` to `Live:` when it gets there: the hub shows the mark on the item's card and records when it went live. Leave both out for work with nothing to try, such as a refactor.
 
 Keep **Next** complete: everything the user asked for that is not started yet belongs there, in the order you will take it, so they can check that nothing they said was dropped. Keep **In progress** to what is being worked on now.
 
@@ -85,9 +97,10 @@ Keep **Next** complete: everything the user asked for that is not started yet be
 
 ## What the hub adds, so don't write it
 
-- **Times.** When each item first appeared, when it left the page, when the page last changed. Never type a clock time.
+- **Times.** When each item first appeared, when its text changed, when it went live, when it left the page. Never type a clock time.
+- **What is new.** The hub sees every change to the page and shows the user what changed since they last looked. So change what has changed, and leave the rest of the page as it is.
 - **Agents.** Every agent the work's sessions started, with model, account, branch, worktree and status, read from the harness the agents run in. Write a `## Running` section only for what it can't see, such as a remote machine. A dev server's link goes under `## Try it`.
-- **Pull requests.** Every pull request linked to the work's sessions, with title, state and merge time, read from the harness. Each shows once. One that merged is under the Shipped line that names it, or on its own at the end of Shipped. One still open or in draft is listed as in progress.
+- **Pull requests.** Every pull request linked to the work's sessions, with title, state and merge time, read from the harness. Each shows once. One that merged is on the card of the Shipped line that names it, or has a Shipped card of its own. One still open or in draft is on the card of the In progress line that names it, or has an In progress card of its own.
 - **The feed.** Built from the changes the hub sees in the file.
 
 ## Who writes
@@ -108,13 +121,31 @@ GitHub-flavoured Markdown. Raw HTML works; scripts are removed.
 progress new "<title>"     create the folder and file for this thread and print the path.
                            Run again from the same thread, it prints the same path.
 progress join <work>       add this thread to work that already has a page, and print the path.
+                           From a thread on another page it changes nothing, unless --move
+                           takes the thread off that page: a thread keeps one page.
 progress path              the page this thread belongs to. Works from a subagent too.
-progress check [<work>]    what the hub reads from the page, and anything it could not read.
+progress check [<work>]    what the hub reads from the page, anything to fix on it, and any ask
+                           the user marked done in the hub.
 progress todo "<text>"     add to the user's own todos in the hub. Linked to this thread's work.
 ```
 
-After that, edit the file with your normal tools.
+## Editing the page
+
+Commands make the common edits safely. Each changes only the lines it is about and writes the file in one step, or changes nothing and says why. Name a line by words that stand together in its first line, in any case, or by a link or `#number` it holds, given whole; `pull/57` names it as `#57` does. A name that matches no line, or more than one, changes nothing. Text given to a command is one line. `progress --help` has the details.
+
+```
+progress summary "<text>"                     replace the summary.
+progress add <section> "<line>"               add an item: needs, doing, next, decisions or shipped.
+progress move "<line>" <section>              move an item, such as from doing to shipped.
+progress reword "<line>" "<new first line>"   change an item's first line, where it is.
+progress live "<line>" "<where>"              say a Shipped item is live, or --not-live "<what it waits on>".
+progress remove "<line>"                      take an item off, such as a settled ask.
+```
+
+`add`, `move` and `reword` take `--under "<line>"`, once for each line to write under the item, after any it has, and `--pr <url>`, which puts the pull request at the start of the line unless it links it already. `move --as "<new first line>"` rewords the item on its way. A line that says it is in review or waiting on something goes to Shipped only with new words: `progress move "<line>" shipped --as "<what is now true>" --pr <url>`.
+
+Editing the file by hand is still fine, for anything these don't cover: the goal, a freeform section, changing the lines under an item, an ask written as prose.
 
 ## Todos
 
-The user keeps a list of things to do later in the hub, under Todos. It is theirs: no page holds it, and an agent never ticks or removes one. When they ask to be reminded of something ("remind me to rotate the key once this lands"), run `progress todo "<text>"` with the words they would want to read later. The todo is linked to this thread's work, and the hub shows when that work has settled. This is not for what blocks the work now, which goes under `## Needs you`.
+The user keeps a list of things to do later in the hub, at the foot of Home. It is theirs: no page holds it, and an agent never ticks or removes one. When they ask to be reminded of something ("remind me to rotate the key once this lands"), run `progress todo "<text>"` with the words they would want to read later. The todo is linked to this thread's work, and the hub shows when that work has settled. This is not for what blocks the work now, which goes under `## Needs you`.

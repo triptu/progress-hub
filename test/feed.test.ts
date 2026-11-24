@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { FeedEntry, Instant, PullRequest, WorkId } from "../src/core/types.ts";
 import { plain } from "../src/core/text.ts";
-import { describe, feedMatches, onceEach, shippedOf } from "../src/web/lib/feed.ts";
+import { describe, rowMatches, rowsOf, rowsSince } from "../src/web/lib/feed.ts";
 
 const at = "2026-11-10T09:00:00.000Z" as Instant;
 const pr: PullRequest = { url: "https://github.com/o/r/pull/7", repo: "o/r", number: 7, title: "The parser", state: "merged", openedAt: null, mergedAt: at };
@@ -23,8 +23,10 @@ test("a Shipped line in the feed links to the pull request it names, known to th
 
 test("search finds a feed entry by its work, its project or its line", () => {
   const entry = { ...shipped("- The parser is in."), workTitle: "Search work", project: "harbor" };
-  expect(["search", "HARBOR", "parser", ""].map((query) => feedMatches(entry, query))).toEqual([true, true, true, true]);
-  expect(feedMatches(entry, "zzz")).toBe(false);
+  const [row] = rowsOf([entry]);
+  if (!row) throw new Error("The entry says nothing.");
+  expect(["search", "HARBOR", "parser", ""].map((query) => rowMatches(row, query))).toEqual([true, true, true, true]);
+  expect(rowMatches(row, "zzz")).toBe(false);
 });
 
 test("a Shipped line that opens with a pull request it lists starts at its first word", () => {
@@ -43,16 +45,27 @@ test("each Shipped line is marked viewed on its own, even when two name one pull
   expect(describe({ ...merge, event: { at, kind: "pr", change: "opened", pr } })?.key).toBeNull();
 });
 
-test("a line an agent reworded shows once, with its new words", () => {
-  const line = (kind: "added" | "removed", id: string, when: string): FeedEntry => {
+test("what is new since the last look tells an item's edits once, and not for an item that itself arrived since", () => {
+  const event = (kind: "added" | "edited", id: string, when: string): FeedEntry => {
     const entry = shipped(`- ${id}`);
     return { ...entry, at: when as Instant, event: { at: when as Instant, kind, section: "shipped", item: { id, title: id, markdown: `- ${id}` } } };
   };
-  // Newest first, as the hub sends it: written, reworded an hour later, and one line taken away and written again.
-  const feed = [line("added", "back", "2026-11-10T12:00:00.000Z"), line("removed", "back", "2026-11-10T11:00:00.000Z"), line("added", "new words", "2026-11-10T10:00:00.000Z"), line("removed", "old words", "2026-11-10T10:00:00.000Z"), line("added", "back", "2026-11-10T09:30:00.000Z"), line("added", "old words", "2026-11-10T09:00:00.000Z")];
-  expect(shippedOf(feed).map((entry) => [entry.event.kind === "added" && entry.event.item.id, entry.at])).toEqual([
-    ["back", "2026-11-10T12:00:00.000Z"],
-    ["new words", "2026-11-10T10:00:00.000Z"],
+  const feed = [event("edited", "old", "2026-11-10T13:00:00.000Z"), event("edited", "old", "2026-11-10T12:00:00.000Z"), event("edited", "new", "2026-11-10T11:30:00.000Z"), event("added", "new", "2026-11-10T11:00:00.000Z"), event("added", "old", "2026-11-10T08:00:00.000Z")];
+  const told = (seen: string) => rowsSince(rowsOf(feed), seen as Instant).map((row) => [row.line.kind === "text" && row.line.tone, row.item, row.at.slice(11, 16)]);
+  expect(told("2026-11-10T10:00:00.000Z")).toEqual([
+    ["edited", "w/old", "13:00"],
+    ["shipped", "w/new", "11:00"],
   ]);
-  expect(onceEach(feed).filter((entry) => entry.event.kind === "added")).toHaveLength(2);
+  expect(told("2026-11-10T14:00:00.000Z")).toEqual([]);
+});
+
+test("two works that share a session tell what happened to its pull request once", () => {
+  const merged = (work: string): FeedEntry => ({ ...shipped("-"), work: work as WorkId, event: { at, kind: "pr", change: "merged", pr } });
+  expect(rowsOf([merged("a"), merged("b")]).map((row) => row.work)).toEqual(["a" as WorkId]);
+});
+
+test("a line reads an event's item only for the kinds that have one", () => {
+  // A finished page's event from another program, with the field an added or a removed line has.
+  const done = { ...shipped("- x"), event: { at, kind: "done", item: null } } as unknown as FeedEntry;
+  expect(rowsOf([done]).map((row) => [row.line.kind === "text" && row.line.tone, row.item])).toEqual([["finished", null]]);
 });

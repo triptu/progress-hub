@@ -5,12 +5,7 @@
   white-space: nowrap;
 }
 
-/* On Home a row is in its work's colour: the name, the dot and the rail down to the next row. */
-.tl.from :global(.tl-from) {
-  color: color-mix(in oklab, var(--proj) 70%, var(--text));
-}
-
-/* Written to outrank the colour a dot takes from its kind: on Home the colour says whose line it is. */
+/* On Home a row is in its work's colour: its tile, the dot and the rail down to the next row. Written to outrank the colour a dot takes from its kind. */
 :global(.timeline) .tl.from .tlDot {
   --dot: var(--proj);
 }
@@ -138,12 +133,13 @@
   height: 18px;
 }
 
-.tlView:hover {
+.tlView:hover:not([role="img"]) {
   background: var(--hover);
   color: var(--text);
 }
 
-.tlView[aria-pressed="true"] {
+.tlView[aria-pressed="true"],
+.tlView[role="img"] {
   color: var(--muted);
 }
 
@@ -173,8 +169,10 @@
 }
 
 /* A line reads as one thing, in one colour and one weight. A star marks the ones a page called important. */
+/* An address in a line breaks where it must, so the line is never wider than the screen. */
 .tlLine {
   color: var(--text);
+  overflow-wrap: anywhere;
 }
 
 .tlText > a:hover {
@@ -207,8 +205,13 @@
   color: var(--needs);
 }
 
-.tl[data-kind="shipped"] .tlDot {
+.tl[data-kind="shipped"] .tlDot,
+.tl[data-kind="live"] .tlDot {
   --dot: var(--working);
+}
+
+.tl[data-kind="live"] .tone {
+  color: var(--working);
 }
 
 /* Under way: the accent. Planned: a ring, not yet filled. */

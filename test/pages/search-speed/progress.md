@@ -19,10 +19,27 @@ A flag means a week of keeping both indexes built and tested. My pick is everyon
 ### Approve the larger phone download
 The shared index adds 4 MB to the phone app. Under the store's cellular limit, but it is your call before the release build.
 
-## Shipped and in review
+## In progress
 
-- https://github.com/kestrel-labs/kestrel/pull/2310 Every index setting is written once, in one shared config. Tokenizer 3.2 everywhere, stemming on for English and German, the stop-word list shared. Exceptions: mobile keeps the smaller ranking model until the next app release, and the web build keeps its own worker file because the browser loads it separately. All tests pass, but CI found two failures, which the agent is fixing: the German stemmer splits compound words differently, and one snapshot test sorts ties in a new order.
-- https://github.com/kestrel-labs/kestrel/pull/2307 Results show as you type, 60 ms after the last key instead of 250 ms. 24 of 26 before/after screenshots (13 screens, light and dark) are pixel-identical; the other 2 differ only in the caret.
+- https://github.com/kestrel-labs/kestrel/pull/2312 The mobile reader opens the shared index without copying it.
+  Reading in place saves 40 MB of memory on a large vault. Two of nine tests still fail on Android 12.
+- Fixing the two CI failures on the shared config.
+  The German stemmer splits compound words differently, and one snapshot test sorts ties in a new order.
+
+## Next
+
+- Rebuild the index when the schema changes, not on every update.
+- Measure search on a 200,000-note vault on a four-year-old phone.
+- Delete the old index bucket a week after the release.
+
+## Shipped
+
+- https://github.com/kestrel-labs/kestrel/pull/2310 Every index setting is written once, in one shared config.
+  Tokenizer 3.2 everywhere, stemming on for English and German, the stop-word list shared. Exceptions: mobile keeps the smaller ranking model until the next app release, and the web build keeps its own worker file because the browser loads it separately.
+
+  Not live: waits on the two CI failures above.
+- ! https://github.com/kestrel-labs/kestrel/pull/2307 Results show as you type, 60 ms after the last key instead of 250 ms.
+  24 of 26 before/after screenshots (13 screens, light and dark) are pixel-identical; the other 2 differ only in the caret.
 
   ![Search popover, before and after](images/search-popover.png)
   ![Results as you type, on the desktop](images/results-desktop.png)
@@ -32,9 +49,18 @@ The shared index adds 4 MB to the phone app. Under the store's cellular limit, b
   ![The phone in the dark theme](images/phone-dark.png)
 
   The numbers are in [Search latency, old index against new](images/latency.html).
-- https://github.com/kestrel-labs/kestrel/pull/2304 The index is updated in place after an edit. With https://github.com/kestrel-labs/kestrel/pull/2305 and https://github.com/kestrel-labs/kestrel/pull/2306: about 400 call sites now pass the changed note instead of asking for a rebuild, so opening the app after an update no longer reindexes everything.
-- https://github.com/kestrel-labs/kestrel/pull/2302 Search on mobile reads the same index format as desktop. Search median on the 50,000-note vault went from 310 ms to 84 ms, but the phone was warmer during the "before" runs.
-- https://github.com/kestrel-labs/kestrel/pull/2299 `ripsearch` listed only at the root, and CI fails when a package pins its own copy. https://github.com/kestrel-labs/kestrel/pull/2297 (mira-k's) merged too.
+
+  Live: in desktop 4.18, out since Tuesday.
+- https://github.com/kestrel-labs/kestrel/pull/2304 The index is updated in place after an edit.
+  With https://github.com/kestrel-labs/kestrel/pull/2305 and https://github.com/kestrel-labs/kestrel/pull/2306: about 400 call sites now pass the changed note instead of asking for a rebuild, so opening the app after an update no longer reindexes everything.
+
+  Live: in desktop 4.18.
+- https://github.com/kestrel-labs/kestrel/pull/2302 Search on mobile reads the same index format as desktop.
+  Search median on the 50,000-note vault went from 310 ms to 84 ms, but the phone was warmer during the "before" runs.
+
+  Not live: ships with the next phone release, which waits on your answer about the download size.
+- https://github.com/kestrel-labs/kestrel/pull/2299 `ripsearch` is listed only at the root.
+  CI fails when a package pins its own copy. https://github.com/kestrel-labs/kestrel/pull/2297 (mira-k's) merged too.
 
 ## Decisions
 

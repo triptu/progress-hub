@@ -5,7 +5,7 @@ type Theme = "light" | "dark";
 // index.html reads the same key before the first paint, so the page never opens in the wrong look.
 const KEY = "progress:theme";
 /** The browser's own bar takes the colour of the app's bar. */
-const BAR: Record<Theme, string> = { light: "#fafafa", dark: "#0a0a0a" };
+const BAR: Record<Theme, string> = { light: "#fbfcfc", dark: "#141517" };
 const system = matchMedia("(prefers-color-scheme: light)");
 const listeners = new Set<() => void>();
 

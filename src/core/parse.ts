@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { isAbsolute, join, normalize, relative } from "node:path";
-import { plain } from "./text.ts";
+import { LONG_TITLE, plain, splitItem, trimLines } from "./text.ts";
 import type { Item, Page, Section, SectionKind, TryLink } from "./types.ts";
 
 export const SECTION_LABEL: Readonly<Record<SectionKind, string>> = { needs: "Needs you", doing: "In progress", next: "Next", decisions: "Decisions", shipped: "Shipped" };
@@ -25,6 +25,12 @@ const NEAR_MISSES: readonly { readonly kind: SectionKind; readonly name: RegExp 
 /** All an empty Needs you may say. Anything else, even "No access to staging", is shown, so a blocker is never missed. */
 const NOTHING = /^(nothing|none|no blockers|n\/a|nothing needs you|nothing is waiting)( (right now|for now|yet|so far|today|currently|at the moment))?$/;
 
+/** "Nothing right now." with more after it, which is an ask however it opens. */
+function startsWithNothing(title: string): boolean {
+  const first = /^.*?[.!](?=\s)/.exec(title)?.[0];
+  return first !== undefined && saysNothing(first);
+}
+
 function saysNothing(markdown: string): boolean {
   const text = plain(markdown.replace(/^\s*([-*+]|\d+[.)])\s+/, "")).toLowerCase();
   return NOTHING.test(text.replace(/[.!]+$/, ""));
@@ -33,30 +39,80 @@ function saysNothing(markdown: string): boolean {
 interface Block {
   readonly level: number;
   readonly heading: string;
+  /** Where the block starts among the lines it was split from: its heading, or its first line. */
+  readonly at: number;
   readonly lines: readonly string[];
+}
+
+/** Lines of the page, counted from 0, `end` excluded. A line ends at \n, \r\n or a lone \r. */
+export interface Span {
+  readonly start: number;
+  readonly end: number;
+}
+
+export interface LocatedItem {
+  readonly item: Item;
+  readonly kind: SectionKind;
+  /** The item's lines, with the blank lines after it up to the next item. */
+  readonly span: Span;
+  /** `###`, or the bullet it starts with (`-`, `1.`, `!`…). Null for an ask written as prose. */
+  readonly marker: string | null;
+}
+
+export interface LocatedSection {
+  readonly kind: SectionKind | null;
+  /** From the heading to the line before the next `#` or `##` heading. */
+  readonly span: Span;
+  readonly items: readonly LocatedItem[];
+  /** In Needs you, the "Nothing right now." that says no item is open. */
+  readonly nothing: Span | null;
+}
+
+/** A page, and the lines each part of it came from. Every section is here, Goal too. */
+export interface LocatedPage {
+  readonly page: Page;
+  readonly summary: Span;
+  /** A summary paragraph that starts "Goal:", which is the goal and not the summary. */
+  readonly goalInSummary: Span | null;
+  readonly sections: readonly LocatedSection[];
 }
 
 /** Reads a progress.md. Never throws. `folder` is the work's folder, used to check links. */
 export function parsePage(source: string, folder: string | null = null): Page {
+  return locatePage(source, folder).page;
+}
+
+/** Reads a progress.md as `parsePage` does, and says which lines each part came from. */
+export function locatePage(source: string, folder: string | null = null): LocatedPage {
   const notes: string[] = [];
-  const { fields, body } = frontMatter(source.replace(/\r\n?/g, "\n"), notes);
-  const blocks = splitAt(body.split("\n"), (line) => {
+  // A byte order mark is not text of the page.
+  const normal = source.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
+  const { fields, body } = frontMatter(normal, notes);
+  const head = normal.slice(0, normal.length - body.length);
+  // The line the body starts on. Front matter with no line after it leaves an empty body past the last line.
+  const offset = (head.match(/\n/g)?.length ?? 0) + (head !== "" && !head.endsWith("\n") ? 1 : 0);
+  const bodyLines = body.split("\n");
+  const blocks = splitAt(bodyLines, (line) => {
     const match = /^(#{1,2})\s+(.*?)\s*#*\s*$/.exec(line);
     return match?.[1] && match[2] !== undefined ? { level: match[1].length, heading: match[2] } : null;
   });
 
+  const ends = (n: number) => offset + (blocks.parts[n]?.at ?? bodyLines.length);
   let summaryLines: readonly string[] = blocks.intro;
+  let summarySpan: Span = { start: offset, end: ends(0) };
   let titleHeading: string | null = null;
   const first = blocks.parts[0];
   if (first && first.level === 1 && kindOf(first.heading) === null && summaryLines.every((line) => line.trim() === "")) {
     titleHeading = plain(first.heading);
     summaryLines = first.lines;
+    summarySpan = { start: offset + first.at + 1, end: ends(1) };
     blocks.parts.shift();
   }
 
   const occurrences = new Map<string, number>();
   const seenKinds = new Set<SectionKind>();
-  const sections = blocks.parts.map((block) => section(block, occurrences, seenKinds, notes));
+  const located = blocks.parts.map((block, n) => section(block, { start: offset + block.at, end: ends(n + 1) }, occurrences, seenKinds, notes));
+  const sections = located.map((each) => each.section);
   const deeper = body.split("\n").flatMap((line) => /^#{3,6}\s+(.*)$/.exec(line)?.[1] ?? []);
   for (const known of KNOWN) {
     if (!seenKinds.has(known.kind) && deeper.some((heading) => kindOf(heading) === known.kind)) {
@@ -68,7 +124,16 @@ export function parsePage(source: string, folder: string | null = null): Page {
 
   // The goal is its own section, or a paragraph of the summary that starts "Goal:", which is how agents wrote it unasked.
   const goalAt = sections.findIndex((s) => s.kind === null && GOAL_HEADING.test(headingName(s.heading)));
-  const paragraphs = summaryLines.join("\n").trim().split(/\n\s*\n/);
+  // The summary's paragraphs are its runs of lines that are not blank.
+  const runs: Span[] = [];
+  summaryLines.forEach((line, n) => {
+    const at = summarySpan.start + n;
+    if (line.trim() === "") return;
+    const last = runs.at(-1);
+    if (last && last.end === at) runs[runs.length - 1] = { start: last.start, end: at + 1 };
+    else runs.push({ start: at, end: at + 1 });
+  });
+  const paragraphs = runs.map((run) => summaryLines.slice(run.start - summarySpan.start, run.end - summarySpan.start).join("\n"));
   const inSummary = goalAt === -1 ? paragraphs.findIndex((paragraph) => GOAL_LEAD.test(paragraph)) : -1;
   const goal = goalAt !== -1 ? (sections[goalAt]?.markdown ?? "") : inSummary !== -1 ? (paragraphs[inSummary] ?? "").replace(GOAL_LEAD, "").trim() : "";
   if (goal === "") notes.push('The page has no goal. Add a "## Goal" section that says, in a line or two, what this work is for.');
@@ -77,7 +142,7 @@ export function parsePage(source: string, folder: string | null = null): Page {
   // An app with no server is opened from where it was built, so a try link may point outside the work's folder.
   if (folder !== null) notes.push(...linkNotes(body, folder, new Set(tryLinks.map((link) => link.url))));
 
-  return {
+  const page: Page = {
     title: fields.title ?? titleHeading ?? (folder === null ? "Untitled" : folderName(folder)),
     project: fields.project,
     done: fields.done,
@@ -87,6 +152,7 @@ export function parsePage(source: string, folder: string | null = null): Page {
     sections: sections.filter((_, index) => index !== goalAt),
     notes,
   };
+  return { page, summary: summarySpan, goalInSummary: runs[inSummary] ?? null, sections: located.map((each) => each.located) };
 }
 
 /** The section that says where to open what is being built. "Running" is what older pages call it. */
@@ -132,7 +198,7 @@ function linksIn(markdown: string): TryLink[] {
 }
 
 const GOAL_HEADING = /^goals?\b/i;
-const GOAL_LEAD = /^\s*\**goals?\**\s*:\**\s*/i;
+export const GOAL_LEAD = /^\s*\**goals?\**\s*:\**\s*/i;
 
 function folderName(folder: string): string {
   return folder.replace(/\/+$/, "").split("/").at(-1) ?? folder;
@@ -142,66 +208,102 @@ function headingName(heading: string): string {
   return plain(heading).replace(/\s*\(\d+\)\s*$/, "");
 }
 
-function kindOf(heading: string): SectionKind | null {
+export function kindOf(heading: string): SectionKind | null {
   const name = headingName(heading);
   return KNOWN.find((k) => k.name.test(name))?.kind ?? null;
 }
 
-function section(block: Block, occurrences: Map<string, number>, seenKinds: Set<SectionKind>, notes: string[]): Section {
+/** A list section's run of lines: an item, or the text above the first one. */
+interface Entry {
+  readonly lines: readonly string[];
+  readonly span: Span;
+  /** An ask written as prose, which has no marker to keep when it is edited. */
+  readonly prose?: true;
+}
+
+function section(
+  block: Block,
+  span: Span,
+  occurrences: Map<string, number>,
+  seenKinds: Set<SectionKind>,
+  notes: string[],
+): { section: Section; located: LocatedSection } {
   const name = headingName(block.heading);
   const kind = kindOf(block.heading);
   if (kind === null) {
     const near = block.level === 2 || block.level === 1 ? NEAR_MISSES.find((n) => n.name.test(name)) : undefined;
     if (near) notes.push(`The heading "${block.heading}" looks like "${SECTION_LABEL[near.kind]}". Rename it to "## ${SECTION_LABEL[near.kind]}" so the hub reads it.`);
-    return { heading: block.heading, kind: null, markdown: block.lines.join("\n").trim(), items: [] };
+    return { section: { heading: block.heading, kind: null, markdown: block.lines.join("\n").trim(), items: [] }, located: { kind: null, span, items: [], nothing: null } };
   }
   if (seenKinds.has(kind)) notes.push(`"${SECTION_LABEL[kind]}" appears more than once. The hub reads both, but keep one.`);
   seenKinds.add(kind);
 
-  const { intro, items } = splitItems(block.lines);
-  let lines = items;
+  const { intro, items: parts } = splitItems(block.lines);
+  // The lines under the heading start on the line after it.
+  const line = (n: number | undefined) => span.start + 1 + (n ?? block.lines.length);
+  const introEntry: Entry = { lines: intro, span: { start: line(0), end: line(parts[0]?.at) } };
+  const items = parts.map((part, n): Entry => ({ lines: part.lines, span: { start: line(part.at), end: line(parts[n + 1]?.at) } }));
+  let nothing: Span | null = null;
+  let lines: readonly Entry[] = items;
   let markdown = intro.join("\n").trim();
   if (kind === "needs") {
     // A ticked box is settled. It stays on the page as written, after the introduction, but is not an item.
     const ticked = lines.filter(isTicked);
     lines = lines.filter((entry) => !isTicked(entry));
     const only = lines.length === 1 && markdown === "" ? lines[0] : undefined;
-    if (only && saysNothing(only.join("\n"))) {
-      markdown = trimLines(only).join("\n");
+    if (only && saysNothing(only.lines.join("\n"))) {
+      markdown = trimLines(only.lines).join("\n");
+      nothing = only.span;
       lines = [];
     } else if (lines.length === 0 && markdown !== "" && !saysNothing(markdown) && !markdown.endsWith(":")) {
       // With no open items, prose is the blocker. Prose ending in a colon only introduces the list under it.
-      lines = [intro];
+      lines = [{ ...introEntry, prose: true }];
       markdown = "";
+    } else if (lines.length === 0 && saysNothing(markdown)) {
+      nothing = introEntry.span;
     }
-    if (ticked.length > 0) markdown = [markdown, ticked.map((entry) => trimLines(entry).join("\n")).join("\n")].filter((part) => part !== "").join("\n\n");
+    if (ticked.length > 0) markdown = [markdown, ticked.map((entry) => trimLines(entry.lines).join("\n")).join("\n")].filter((part) => part !== "").join("\n\n");
   }
   if (kind === "doing" || kind === "next") {
     // A ticked box is done: it is no longer in progress or planned. It stays on the page as written.
     const ticked = lines.filter(isTicked);
     lines = lines.filter((entry) => !isTicked(entry));
-    if (ticked.length > 0) markdown = [markdown, ticked.map((entry) => trimLines(entry).join("\n")).join("\n")].filter((part) => part !== "").join("\n\n");
+    if (ticked.length > 0) markdown = [markdown, ticked.map((entry) => trimLines(entry.lines).join("\n")).join("\n")].filter((part) => part !== "").join("\n\n");
   }
-  const parsed = lines.map((entry) => item(kind, entry, occurrences));
+  const located = lines.map((entry): LocatedItem => ({
+    item: item(kind, entry.lines, occurrences),
+    kind,
+    span: entry.span,
+    marker: entry.prose ? null : (/^(###|[-*+!]|\d+[.)])\s/.exec(entry.lines[0] ?? "")?.[1] ?? null),
+  }));
+  const parsed = located.map((entry) => entry.item);
+  if (kind === "needs" && parsed.length === 1 && startsWithNothing(parsed[0]?.title ?? "")) {
+    notes.push(`Needs you says nothing is needed and then says more, so the hub shows it as an ask. Leave only "Nothing right now.", or write what is needed as an item.`);
+  }
+  // An item's first line is its name: a card's words on the board, and what tells the hub it is the same item after an edit.
+  const long = kind === "decisions" ? [] : parsed.filter((entry) => entry.title.length > LONG_TITLE);
+  if (long.length > 0) {
+    notes.push(`${SECTION_LABEL[kind]}: ${long.length === 1 ? "an item's first line runs" : `${long.length} items' first lines run`} past ${LONG_TITLE} characters. The first line is the item's name on the board: say what it is in a sentence, and put the rest on the lines under it.`);
+  }
   if (kind === "shipped") {
     for (const entry of parsed) {
       const bare = /(?<![\w/[])#(\d+)\b/.exec(withoutCode(entry.markdown).replace(/\[[^\]]*\]\([^)]*\)/g, ""));
       if (bare) notes.push(`Shipped: "${entry.title}" names #${bare[1]} with no link. Write the full pull request URL so the hub can show its title and state.`);
     }
   }
-  return { heading: block.heading, kind, markdown, items: parsed };
+  return { section: { heading: block.heading, kind, markdown, items: parsed }, located: { kind, span, items: located, nothing } };
 }
 
-function isTicked(lines: readonly string[]): boolean {
-  return /^[-*+]\s+\[[xX]\]\s/.test(lines[0] ?? "");
+function isTicked(entry: Entry): boolean {
+  return /^[-*+]\s+\[[xX]\]\s/.test(entry.lines[0] ?? "");
 }
 
 /** `###` blocks, or with none, top-level bullets. A line that swaps its bullet for the important mark, `! text`, is a bullet too. */
-function splitItems(lines: readonly string[]): { intro: readonly string[]; items: readonly (readonly string[])[] } {
+function splitItems(lines: readonly string[]): { intro: readonly string[]; items: readonly Block[] } {
   const byHeading = splitAt(lines, (line) => (/^###\s+\S/.test(line) ? true : null));
-  if (byHeading.parts.length > 0) return { intro: byHeading.intro, items: byHeading.parts.map((p) => p.lines) };
+  if (byHeading.parts.length > 0) return { intro: byHeading.intro, items: byHeading.parts };
   const byBullet = splitAt(lines, (line) => (/^([-*+!]|\d+[.)])\s+\S/.test(line) ? true : null));
-  return { intro: byBullet.intro, items: byBullet.parts.map((p) => p.lines) };
+  return { intro: byBullet.intro, items: byBullet.parts };
 }
 
 function item(kind: SectionKind, lines: readonly string[], occurrences: Map<string, number>): Item {
@@ -214,30 +316,6 @@ function item(kind: SectionKind, lines: readonly string[], occurrences: Map<stri
 }
 
 /**
- * An item's first line without its `###` or bullet marker, and the lines after it, dedented.
- * A title that starts with `!` and a space is one the user should not miss; the mark is not part of the title.
- */
-export function splitItem(markdown: string): { readonly title: string; readonly body: string; readonly important: boolean } {
-  const [first = "", ...rest] = markdown.split("\n");
-  const indents = rest.filter((line) => line.trim() !== "").map((line) => line.length - line.trimStart().length);
-  const indent = indents.length === 0 ? 0 : Math.min(...indents);
-  const title = first.replace(/^(###\s+|[-*+]\s+(\[[ xX]\]\s+)?|\d+[.)]\s+)/, "").replace(/\s+#+\s*$/, "");
-  return {
-    title: title.replace(/^!\s+/, ""),
-    body: trimLines(rest.map((line) => line.slice(indent))).join("\n"),
-    important: /^!\s+\S/.test(title),
-  };
-}
-
-function trimLines(lines: readonly string[]): readonly string[] {
-  let start = 0;
-  let end = lines.length;
-  while (start < end && lines[start]?.trim() === "") start++;
-  while (end > start && lines[end - 1]?.trim() === "") end--;
-  return lines.slice(start, end);
-}
-
-/**
  * Splits lines at the ones `match` accepts, skipping fenced code. Each part starts with its matching line,
  * which a `{level, heading}` result consumes and a `true` result keeps.
  */
@@ -246,16 +324,16 @@ function splitAt<T extends { level: number; heading: string } | true>(
   match: (line: string) => T | null,
 ): { intro: string[]; parts: Block[] } {
   const intro: string[] = [];
-  const parts: { level: number; heading: string; lines: string[] }[] = [];
+  const parts: { level: number; heading: string; at: number; lines: string[] }[] = [];
   let fence: string | null = null;
-  for (const line of lines) {
+  for (const [at, line] of lines.entries()) {
     const fenceMark = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
     if (fenceMark !== undefined && (fence === null || fenceMark.startsWith(fence))) {
       fence = fence === null ? fenceMark : null;
     }
     const hit = fence === null && fenceMark === undefined ? match(line) : null;
-    if (hit === true) parts.push({ level: 0, heading: "", lines: [line] });
-    else if (hit !== null) parts.push({ level: hit.level, heading: hit.heading, lines: [] });
+    if (hit === true) parts.push({ level: 0, heading: "", at, lines: [line] });
+    else if (hit !== null) parts.push({ level: hit.level, heading: hit.heading, at, lines: [] });
     else (parts.at(-1)?.lines ?? intro).push(line);
   }
   return { intro, parts };
@@ -296,12 +374,12 @@ function unquote(value: string): string {
   return /^(["']).*\1$/.test(v) ? v.slice(1, -1) : v;
 }
 
-function withoutCode(markdown: string): string {
+export function withoutCode(markdown: string): string {
   return markdown.replace(/```[\s\S]*?```/g, "").replace(/`[^`]*`/g, "");
 }
 
 /** Every href and src in the page, as Bun's Markdown renderer sees them. */
-function linkTargets(markdown: string): string[] {
+export function linkTargets(markdown: string): string[] {
   const targets: string[] = [];
   const collect = (attr: string) => ({
     element(el: HTMLRewriterTypes.Element) {

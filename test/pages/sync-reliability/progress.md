@@ -33,10 +33,17 @@ Every main run since 07:30 failed in `conflict-merge.test.ts`. https://github.co
 
 Twice today an edit made offline on the phone took over 90 seconds to show on the desktop after the phone came back online; it usually takes 4 seconds. Post this to the mobile team? My pick: yes, one message with both traces.
 
-## Running
+## In progress
 
-- Other failing workflows on main: triage done. Lint, the docs build and most late failures were the 11:40 outage (runs with no jobs). The schema check waits on https://github.com/kestrel-labs/kestrel/pull/2280 by design. [Full table](runs/main-triage.md).
-- Still unchecked: the large-vault suite runs only in the release workflow; the release running now will show it.
+- Triage of the other failing workflows on main.
+  Lint, the docs build and most late failures were the 11:40 outage (runs with no jobs). The schema check waits on https://github.com/kestrel-labs/kestrel/pull/2280 by design. [Full table](runs/main-triage.md).
+- https://github.com/kestrel-labs/kestrel/pull/2303 Offline edits are sent in one batch when the phone comes back.
+
+## Next
+
+- Check the large-vault suite, which runs only in the release workflow.
+- Take the two conflict-merge cases the open fix leaves.
+- Keep fixing failures until main stays green for a day.
 
 ## Decisions
 
@@ -46,15 +53,26 @@ Twice today an edit made offline on the phone took over 90 seconds to show on th
 
 ## Shipped
 
-- ! https://github.com/kestrel-labs/kestrel/pull/2301 The sync worker ends green with "Skipped" for draft PRs and bot PRs; real failures still fail. Runs since the merge are green.
-- https://github.com/kestrel-labs/kestrel/pull/2298 Test machines use one current image from one file, and phone runs follow CI's simulator choice.
-- https://github.com/kestrel-labs/kestrel/pull/2296 The cursor stays where you typed after a remote edit arrives. Desktop and web. Limit: on a slow network an old update can still move it once, as before.
-- https://github.com/kestrel-labs/kestrel/pull/2293 PRs run the sync tests in random order, like main, with https://github.com/kestrel-labs/kestrel/pull/2294 and https://github.com/kestrel-labs/kestrel/pull/2295 fixing the three tests that only passed in file order.
+- ! https://github.com/kestrel-labs/kestrel/pull/2301 The sync worker ends green with "Skipped" for draft PRs and bot PRs.
+  Real failures still fail. Runs since the merge are green.
+- https://github.com/kestrel-labs/kestrel/pull/2298 Test machines use one current image from one file.
+  Phone runs follow CI's simulator choice.
+- https://github.com/kestrel-labs/kestrel/pull/2296 The cursor stays where you typed after a remote edit arrives.
+  Desktop and web. Limit: on a slow network an old update can still move it once, as before.
+
+  Live: on the web, and in desktop 4.18.
+- https://github.com/kestrel-labs/kestrel/pull/2293 PRs run the sync tests in random order, like main.
+  With https://github.com/kestrel-labs/kestrel/pull/2294 and https://github.com/kestrel-labs/kestrel/pull/2295 fixing the three tests that only passed in file order.
 - https://github.com/kestrel-labs/kestrel/commit/4be71c9 The test helper resets the clock between tests.
 - Agent tooling now uses the newest review model.
-- https://github.com/kestrel-labs/kestrel/pull/2289 Two flaky conflict tests fixed (timing races in the tests). Verified on a test machine and three CI runs.
-- https://github.com/kestrel-labs/kestrel/pull/2286 Logging out no longer leaves the app on "Preparing your vault". You merged it at 09:12. The full web suite on main passes, logout included.
-- Checks left undone: every hourly sync run from 08:00 to 17:00 passed on macOS, Windows and web. [Report](runs/hourly-report.md).
+- https://github.com/kestrel-labs/kestrel/pull/2289 Two flaky conflict tests fixed.
+  Timing races in the tests. Verified on a test machine and three CI runs.
+- https://github.com/kestrel-labs/kestrel/pull/2286 Logging out no longer leaves the app on "Preparing your vault".
+  You merged it at 09:12. The full web suite on main passes, logout included.
+
+  Not live: the web deploy is run by hand. Say go and I will run it.
+- Every hourly sync run from 08:00 to 17:00 passed on macOS, Windows and web.
+  [Report](runs/hourly-report.md).
 
 ## Ideas
 

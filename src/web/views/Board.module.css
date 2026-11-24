@@ -1,337 +1,826 @@
-.card.ghost::before,
-.card.ghost::after {
-  content: "";
-  position: absolute;
-  inset-inline-start: var(--s4);
-  height: 8px;
-  border-radius: var(--r-s);
-  background: var(--raise);
-}
-
-.card :global(.avatar-dot) {
-  border-color: var(--raise);
-}
-
-.card code {
-  background: var(--sel);
-}
-
+/*
+ * The board: four lanes side by side, each scrolling on its own, so every lane's name stays in view. A lane has no box: its cards are what is drawn.
+ * One kind of card in all of them. A card says which work it is from, what it is in full, and under that the
+ * pull request it names and when it arrived.
+ */
 .board {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--board-rail);
-  gap: var(--s12);
-  align-items: start;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  height: 100%;
+  /* Four lanes need the room. In a window too narrow for them and the gutters, the gutters give way first, so the lanes scroll sideways only when nothing else can. */
+  --edge: clamp(var(--s4), (100cqw - 4 * var(--lane-min) - 3 * var(--s4)) / 2, var(--gutter));
+  /* The board is not a page with a width of its own: it runs from one gutter to the other, so it takes the room a hidden sidebar leaves. */
+  padding: var(--top) var(--edge) 0;
 }
 
-.boardMain {
+.board > :global(.view-head) {
+  max-width: none;
+}
+
+.lanes {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(var(--lane-min), 1fr);
+  /* One row as tall as the screen has left. A lane is as tall as what it holds, up to that row. */
+  grid-template-rows: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--s4);
+  min-height: 0;
+  /* When the lanes are wider than the screen they scroll out to its edge, not to a cut in mid-page. At rest the last one still ends on the gutter. */
+  /* On the leading side the lanes reach a little past their edge and are pulled back by as much: the small button that stands for an empty lane overhangs that edge, and a scroller cuts what sticks out of it. */
+  margin-inline: calc(-1 * var(--s3)) calc(-1 * var(--edge));
+  padding: 0 var(--edge) var(--s6) var(--s3);
+  scroll-padding-inline: var(--s3) var(--edge);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+}
+
+/* With nothing waiting, the first lane is one small button, and its column is as wide as that. */
+.lanes:has(> .laneRail) {
+  grid-template-columns: auto;
+}
+
+/* Its icon stands on the edge the screen's name starts on. */
+.laneRail {
+  margin-inline-start: calc((16px - var(--hit)) / 2);
+  scroll-snap-align: start;
+}
+
+.lane {
+  --lane: var(--muted);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  /* A lane is as wide as its share, whatever its head holds. A narrow one shows its tool as the icon alone. */
+  grid-template-columns: minmax(0, 1fr);
+  container-type: inline-size;
   min-width: 0;
+  max-height: 100%;
+  scroll-snap-align: start;
+}
+
+.lane[data-lane="needs"],
+.laneFolded[data-lane="needs"] {
+  --lane: var(--needs);
+}
+
+.lane[data-lane="doing"],
+.laneFolded[data-lane="doing"] {
+  --lane: var(--accent);
+}
+
+.lane[data-lane="shipped"],
+.laneFolded[data-lane="shipped"] {
+  --lane: var(--working);
+}
+
+/* The lane's mark stands on the edge its cards start on. */
+.laneHead {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 0 var(--s2) 2px;
+}
+
+
+/* A lane's mark, its name and how much it holds. */
+.laneName {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.laneName > svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--lane);
+}
+
+/* In the wide lane's head the folded lanes stand round its name in the board's order, a step apart from it. */
+.lane[data-wide] .laneHead {
+  flex-wrap: wrap;
+  gap: var(--s1);
+}
+
+.lane[data-wide] .laneName {
+  padding-inline: var(--s2) var(--s3);
+}
+
+.lane[data-wide] .laneName:first-child {
+  padding-inline-start: 2px;
+}
+
+.lane[data-wide] .laneFolded:first-child {
+  margin-inline-start: calc(-1 * var(--s2) + 2px);
+}
+
+.laneHead h2 {
+  color: var(--text);
+  font: var(--t-heading);
+  white-space: nowrap;
+}
+
+@container (max-width: 15rem) {
+  .laneToolLabel {
+    display: none;
+  }
+}
+
+/* What acts on the whole lane sits at its far end, small and with no edge of its own. */
+/* What acts on a lane stands at its far end: what marks its cards, then the switch that gives it the board's width. */
+.laneEnd {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-inline-start: auto;
+}
+
+.laneTool {
+  padding-inline: var(--s2);
+  box-shadow: none;
+  color: var(--muted);
+}
+
+.laneTool:hover {
+  color: var(--text);
+}
+
+/* The lanes scroll sideways and cut what sticks out above them, so the ring is drawn inside the button. */
+.laneTool:focus-visible {
+  outline-offset: -2px;
+}
+
+.laneBody {
+  padding-bottom: var(--s2);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
 }
 
 .cards {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--s4);
+  gap: var(--s2);
 }
 
-/* The tile has its own column, so every line of the card starts on one edge. */
-.card {
+/*
+ * A lane given the board's width is skimmed from top to bottom: a card to a row, as wide as the lane and whole, so
+ * nothing has to be opened. Its words stop at a width they read at, its pictures are large, and what marks it
+ * stands at the row's end, in the same place on every row.
+ */
+.row {
   display: grid;
-  grid-template-columns: var(--avatar-m) minmax(0, 1fr);
-  gap: var(--s4);
-  align-items: start;
-  padding: var(--s6);
-  border: 1px solid var(--line);
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s3) var(--s4);
+  padding: var(--s4) var(--s4) var(--s4) var(--s6);
   border-radius: var(--r-l);
-  background: var(--raise);
+  background: var(--card);
+  box-shadow: var(--card-edge);
 }
 
-.card:hover {
-  background: color-mix(in oklab, var(--sel) 45%, var(--raise));
+/* Words stop at a width they read at. Pictures take the row's. */
+.row .whole > :global(.prose) > :not(:has(img, video, iframe)) {
+  max-width: 52rem;
 }
 
-.cardMain {
+/* On the line that says where the card is from, whatever the size of what it holds. */
+.rowEnd {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  align-self: start;
+  height: 1lh;
+  font: var(--t-small);
+}
+
+.rowDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.rowFoot {
+  grid-column: 1 / -1;
+}
+
+/* A row's line follows close on where it is from, and what its page says follows close on the line. Every row's line is set alike, long or short, so a list of them reads as one. */
+.row .wholeTitle,
+.row .wholeTitle[data-long] {
+  max-width: 52rem;
+  margin-top: var(--s1);
+  font: var(--t-body);
+  font-weight: var(--medium);
+}
+
+.row .whole > :global(.prose),
+.row .whole > :global(.cmd) {
+  margin-top: var(--s2);
+}
+
+/* Whether it is live and where, on the line with the time. */
+/* A long one takes a line of its own before it breaks. */
+.wholeLiveLine {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--s2);
+  max-width: 100%;
+}
+
+/* Viewed, or marked done: still there, and all of it out of the way. */
+.row[data-quiet] .wholeTitle,
+.row[data-quiet] .whole > :global(.prose) {
+  color: var(--muted);
+}
+
+.row[data-quiet] :global(.prose) img {
+  opacity: 0.6;
+}
+
+/* A picture is what a row is skimmed by, so it is larger here than on a page: one alone, and several side by side. */
+.row :global(.prose) img {
+  max-height: 520px;
+}
+
+/*
+ * A picture keeps its own shape, as wide as the row lets it be and no taller than the most a row gives one. One several
+ * times taller than wide, such as a whole page on a phone, would be a sliver at that height: its shape stops at a
+ * phone screen's, so it keeps a width it can be read at and shows from its top. Opened, it is whole.
+ */
+.row :global(.prose) img[style*="--w"] {
+  --max-h: 520px;
+  --shape: max(calc(var(--w) / var(--h)), calc(240 / 520));
+  width: min(calc(var(--w) * 1px), calc(var(--max-h) * var(--shape)));
+  height: auto;
+  aspect-ratio: var(--shape);
+  object-fit: cover;
+  object-position: top;
+}
+
+/* Several pictures stand side by side at one height, each whole and at its own shape, so a phone's screen is not cut to a desktop's. In a lane with less room they are lower, so two still stand abreast. */
+.row :global(.prose) p:has(> :global(.fig) + :global(.fig)) {
+  --strip-h: 260px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  gap: var(--s3);
+}
+
+.row :global(.prose) p:has(> :global(.fig) + :global(.fig)) :global(.fig) {
+  display: flex;
+  flex-direction: column;
+  width: min-content;
+}
+
+.row :global(.prose) p:has(> :global(.fig) + :global(.fig)) img {
+  width: auto;
+  max-width: none;
+  height: var(--strip-h);
+  object-fit: contain;
+}
+
+/* A phone's screen among them would be a sliver at that height, so it keeps the width one alone has and stands taller than its neighbours. */
+.row :global(.prose) p:has(> :global(.fig) + :global(.fig)) img[style*="--w"] {
+  width: max(calc(var(--strip-h) * var(--w) / var(--h)), min(15rem, calc(var(--w) * 1px)));
+  height: auto;
+}
+
+/* What a picture is of is said in full, under it. */
+.row :global(.prose) p:has(> :global(.fig) + :global(.fig)) :global(.cap) {
+  display: block;
+}
+
+@container (max-width: 60rem) {
+  .row :global(.prose) p:has(> :global(.fig) + :global(.fig)) {
+    --strip-h: 200px;
+  }
+}
+
+/* The lanes scroll sideways and cut what sticks out above them, so the ring of what stands in a lane's head is drawn inside it. */
+.laneWide:focus-visible,
+.laneFolded:focus-visible,
+.laneRail:focus-visible {
+  outline-offset: -2px;
+}
+
+.laneWide:active,
+.laneFolded:active {
+  background: var(--sel);
+}
+
+/* A lane folded into the head of the wide one: its mark, its name and how much it holds, as quiet as a count until the pointer is on it. */
+.laneFolded {
+  --lane: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  flex: none;
+  height: var(--hit);
+  padding-inline: var(--s2);
+  border-radius: var(--r-m);
+  color: var(--muted);
+  font: var(--t-small);
+  font-weight: var(--medium);
+  white-space: nowrap;
+}
+
+.laneFolded:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.laneFolded svg {
+  width: 14px;
+  height: 14px;
+  color: var(--lane);
+}
+
+/* The fold's button, which the lane has no mark column for. */
+.laneBody > button {
+  grid-template-columns: auto auto;
+  padding-inline: var(--s3);
+}
+
+.laneEmpty,
+.laneFoot {
+  padding: 0 2px var(--s3);
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.laneFoot {
+  padding-top: var(--s3);
+}
+
+/* ------------------------------------------------------------------ A card */
+.card {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  min-width: 0;
+  gap: var(--s1);
+  padding: var(--s3) var(--s3) var(--s1);
+  border-radius: var(--r-l);
+  background: var(--card);
+  box-shadow: var(--card-edge);
 }
 
-.cardTop {
+/* The whole card opens it. Its ring says where the pointer or the keyboard is, and which card is open. */
+.card:hover {
+  background: var(--card-hover);
+  box-shadow: var(--card-edge-hover);
+}
+
+/* Under a press, before it opens. */
+.card:has(.cardOpen:active) {
+  background: color-mix(in oklab, var(--ink) 4%, var(--card-hover));
+}
+
+/* The rings are drawn inside the card's edge: the lanes scroll, and would cut a ring that stood outside the first card. */
+.card:has(.cardOpen[aria-current]) {
+  background: var(--card-hover);
+  box-shadow: inset 0 0 0 2px var(--line-strong);
+}
+
+.card:has(.cardOpen:focus-visible) {
+  box-shadow: inset 0 0 0 2px var(--focus);
+}
+
+.cardFrom {
   display: flex;
-  align-items: baseline;
-  gap: var(--s3);
+  align-items: center;
+  gap: var(--s2);
   min-width: 0;
+  /* Room for the dot that says the card is new. */
+  padding-inline-end: var(--s4);
+  /* The tile carries the project's colour. Its name is said in the grey of everything that stands beside a card's line. */
+  color: var(--muted);
+  font: var(--t-small);
 }
 
-/* The pill's text is smaller than the title's, so the pill centres on the title's line, not on its baseline. */
-.cardTop :global(.pill) {
+.cardFrom span:last-child {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The line in full: a card is read, not guessed at. Only a line that runs to a paragraph is cut, and the open card has the rest. */
+.cardTitle {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text);
+  font-weight: var(--medium);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+.cardOpen {
+  outline: none;
+}
+
+.cardOpen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-l);
+}
+
+.cardTitle code {
+  background: var(--hover);
+}
+
+/* Viewed, or marked done: still there, and out of the way. */
+.card[data-quiet] .cardTitle {
+  color: var(--muted);
+}
+
+.card[data-quiet] .cardShot {
+  opacity: 0.6;
+}
+
+/* Centred on the first line beside it: the work's name and its tile, or with none the card's own first line. */
+.cardDot {
+  --line: var(--avatar-xs);
+  position: absolute;
+  top: calc(var(--s3) + var(--line) / 2 - 3.5px);
+  inset-inline-end: var(--s3);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.card:not(:has(.cardFrom)) .cardDot {
+  --line: calc(0.875rem * 1.55);
+}
+
+/* With no work named above it, the line makes room for the dot itself. */
+.card:not(:has(.cardFrom)):has(.cardDot) .cardTitle {
+  padding-inline-end: var(--s3);
+}
+
+.cardMore {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--muted);
+  font: var(--t-small);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/*
+ * A picture says what a card is about faster than its line, so it takes the width the card's words do, in a
+ * screen's own shape, with an edge that holds a light picture on a dark card. It shows from its top, where a screen's name is.
+ */
+.cardShot {
+  display: block;
+  width: 100%;
+  border-radius: var(--r-s);
+  box-shadow: 0 0 0 1px var(--line);
+  aspect-ratio: 16 / 10;
+  background: var(--raise);
+  object-fit: cover;
+  object-position: top;
+}
+
+/* What closes a card. When it names more than fits on a line, the time and the mark take the next. */
+.cardFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--s2);
+  min-width: 0;
+  min-height: 26px;
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+/* What can be clicked on a card besides the card stands over the link that covers it. */
+.cardPr,
+.cardMark,
+.cardFig {
+  position: relative;
+  z-index: 1;
+}
+
+/* The picture's link is the picture's size, and its pointer says it opens large. */
+.cardFig {
+  display: block;
+  margin-block: var(--s1);
+  border-radius: var(--r-s);
+  cursor: zoom-in;
+}
+
+.cardFig:hover .cardShot {
+  box-shadow: 0 0 0 1px var(--line-strong);
+}
+
+.cardPr {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-inline-start: -4px;
+  padding: 2px 6px 2px 2px;
+  border-radius: var(--r-s);
+  font: var(--t-code);
+}
+
+.cardPr:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.cardPr svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin: 0 3px;
   align-self: center;
 }
 
-.cardTitle {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text);
-  font: var(--t-heading);
+.cardNote {
   white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
-.cardMeta {
-  overflow: hidden;
+/* Live: what shipped can be tried now. Not live: it has merged and waits on something. */
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
   color: var(--muted);
   font: var(--t-small);
   white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
-/* What a work is for. The word that names it is as large as what it names, and a step heavier. */
-.goalLabel {
-  margin-inline-end: var(--s2);
-  color: var(--text);
-  font-weight: var(--strong);
+.live[data-on] {
+  color: var(--working);
 }
 
-.cardGoal {
-  display: -webkit-box;
-  margin-top: var(--s3);
-  overflow: hidden;
-  color: var(--text);
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.cardGoal + .cardSum {
-  margin-top: var(--s1);
-}
-
-.cardSum {
-  display: -webkit-box;
-  margin-top: var(--s3);
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.cardNeed {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--s2);
-  margin-top: var(--s4);
-  padding: var(--s3) var(--s4);
-  border-radius: var(--r-m);
-  background: color-mix(in oklab, var(--needs) 10%, var(--raise));
-}
-
-.cardNeed svg {
+.live svg {
   width: 14px;
   height: 14px;
-  margin-top: 4px;
-  color: var(--needs);
 }
 
-.cardNeed b {
-  margin-inline-end: var(--s1);
-  color: var(--needs);
+.cardEnd {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
 }
 
-.cardFoot {
-  margin-top: var(--s4);
+.cardMark {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-inline-end: -6px;
+  border-radius: var(--r-m);
   color: var(--muted);
-  font: var(--t-small);
+}
+
+.cardMark:hover:not([role="img"]) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.cardMark svg {
+  width: 16px;
+  height: 16px;
 }
 
 .card.ghost {
-  position: relative;
-  display: block;
-  height: 212px;
+  height: 84px;
+  background: color-mix(in oklab, var(--card) 50%, transparent);
+  box-shadow: none;
 }
 
-.card.ghost::before {
-  top: 24px;
-  width: 38%;
-  height: 10px;
+/* ------------------------------------------------------------------ A card in full */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: flex-end;
+  background: color-mix(in oklab, var(--scrim) 55%, transparent);
+  /* Written out: a shorthand that holds a variable keeps the keyframes' name as typed, and the build renames them. */
+  animation-name: fade;
+  animation-duration: var(--fast);
+  animation-timing-function: var(--ease);
 }
 
-.card.ghost::after {
-  top: 64px;
-  width: 72%;
+.sheet {
+  --lane: var(--muted);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(var(--sheet), 100%);
+  height: 100%;
+  background: var(--bg);
+  box-shadow: var(--float-shadow);
+  animation-name: slide;
+  animation-duration: var(--sheet-in);
+  animation-timing-function: var(--ease);
 }
 
-/* Settled work under the board, for a screen with no sidebar. */
-.boardSettled {
-  display: none;
-  margin-top: var(--s6);
+.sheet[data-lane="needs"] {
+  --lane: var(--needs);
 }
 
-.miniWork {
+.sheet[data-lane="doing"] {
+  --lane: var(--accent);
+}
+
+.sheet[data-lane="shipped"] {
+  --lane: var(--working);
+}
+
+/* Only the dimming fades in. The sheet is solid from its first frame, so the board's words never show through it. */
+@keyframes fade {
+  from {
+    background-color: transparent;
+  }
+}
+
+/* The sheet moves in whole. The scrim under it carries the fade, so the board's words never show through the sheet's. */
+@keyframes slide {
+  from {
+    transform: translateX(24px);
+  }
+}
+
+.sheetHead {
   display: flex;
   align-items: center;
-  gap: var(--s3);
-  padding-block: var(--s2);
+  gap: var(--s1);
+  height: var(--tabs-h);
+  padding-inline: var(--s6) var(--s2);
+  border-bottom: 1px solid var(--line);
 }
 
-.boardRail {
-  display: grid;
-  gap: var(--s12);
-  /* The first block's heading sits on the screen title's baseline. */
-  padding-top: 11px;
-}
-
-.blockHead {
-  display: flex;
-  align-items: baseline;
+.sheetLane {
+  display: inline-flex;
+  align-items: center;
   gap: var(--s2);
-  margin-bottom: var(--s3);
-}
-
-/* The rail stands beside the cards, so its headings are a step under theirs. */
-.blockTitle {
   color: var(--text);
   font-weight: var(--strong);
 }
 
-.blockHead:hover .blockTitle {
-  text-decoration: underline;
-  text-underline-offset: 3px;
+.sheetLane svg {
+  width: 14px;
+  height: 14px;
+  color: var(--lane);
 }
 
-/* On Home: each ongoing work's places to try, under the work's name. */
-.tryList {
-  display: grid;
-  gap: var(--s4);
+.sheetAt {
+  flex: 1;
+  margin-inline-start: var(--s2);
+  color: var(--muted);
+  font: var(--t-small);
+  font-variant-numeric: tabular-nums;
 }
 
-.tryList li {
-  display: grid;
-  gap: var(--s1);
+.sheetBody {
+  padding: var(--s6) var(--s6) var(--s8);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  overflow-wrap: anywhere;
+}
+
+/* Everything a card holds, as the open card and a row of a wide lane both show it. */
+.whole {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.wholeFrom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s3);
   color: var(--muted);
   font: var(--t-small);
 }
 
-.tryRow {
+.wholeWork {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--text);
+}
+
+.wholeWork:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.wholeTitle {
+  margin-top: var(--s3);
+  color: var(--text);
+  font: var(--t-heading);
+}
+
+.wholeTitle[data-long] {
+  font: var(--t-body);
+}
+
+.whole > :global(.prose),
+.whole > :global(.cmd),
+.wholePrs {
+  margin-top: var(--s4);
+}
+
+.wholeLive {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s1) var(--s3);
+  margin-top: var(--s4);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-m);
+  background: var(--raise);
+  color: var(--text);
+}
+
+.wholeLiveAt {
+  margin-inline-start: auto;
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.sheetFoot {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s2);
+  padding: var(--s3) var(--s6);
+  border-top: 1px solid var(--line);
 }
 
-.blockEmpty {
-  color: var(--muted);
+.sheetFoot:empty {
+  display: none;
 }
 
-.mini {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 2px;
-  padding-block: var(--s3);
-}
-
-.mini:hover .miniTitle {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.miniTitle {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text);
-  font: var(--t-small);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-/* A line in the rail can run to two lines before it is cut, so it says what shipped. */
-.mini > .miniTitle {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  white-space: normal;
-  line-height: 1.45;
-}
-
-.miniSub {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s2);
-  min-width: 0;
-  color: var(--muted);
-  font: var(--t-small);
-}
-
-.miniWhere {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.miniSub :global(.when) {
-  margin-inline-start: auto;
-}
-
-.block li.viewed .miniTitle {
-  color: var(--muted);
-}
-
-/* The screen is too narrow for two columns: the outline becomes a strip that stays at the top. */
-@container (max-width: 1000px) {
-  /* One column: what needs the user comes before the list of work, and what shipped after it. */
-  .board {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--s6);
-  }
-
-  .boardMain,
-  .boardRail {
-    display: contents;
-  }
-
-  .board :global(.view-head) {
-    order: -3;
-    margin-bottom: 0;
-  }
-
-  .block.needs {
-    order: -1;
-  }
-
-  .block.shipped {
-    order: 1;
-  }
-
-  .boardSettled {
-    order: 2;
+@media (prefers-reduced-motion: reduce) {
+  .scrim,
+  .sheet {
+    animation: none;
   }
 }
 
 @media (max-width: 760px) {
-  /* On a phone code has no ground anywhere, a card's included. */
-  .card code {
-    background: none;
+  /* A phone shows a lane at a time, with the edge of the next one in view to say it is there. */
+  .board {
+    padding: var(--top) 0 0;
   }
 
-  .boardSettled {
-    display: block;
+  .board > :global(.view-head),
+  .board > :global(.work-head),
+  .board > :global(.nothing) {
+    margin-inline: var(--gutter);
   }
 
-  .cardTitle {
-    white-space: normal;
+  .lanes {
+    grid-auto-columns: 86%;
+    margin-inline: 0;
+    padding-inline: var(--gutter);
+    scroll-padding-inline: var(--gutter);
+    scroll-snap-type: x mandatory;
   }
 
-  /* The tile sits beside the name only, so the lines under it get the card's whole width. */
-  .card {
-    gap: 0 var(--s3);
-    padding: var(--s4);
+  /* A phone shows one lane at a time already. */
+  .laneWide {
+    display: none;
   }
 
-  .card > :global(.avatar) {
-    grid-row: span 2;
+  /* What a finger presses is as large as the app's other controls here. It overhangs its row, so every lane's head is as tall. */
+  .laneTool {
+    --hit: 40px;
+    margin-block: -10px;
   }
 
-  .cardMain {
-    display: contents;
+  .cardMark {
+    width: var(--hit);
+    height: var(--hit);
   }
 
-  .cardMain > :not(.cardTop, .cardMeta) {
-    grid-column: 1 / -1;
+  .cardPr {
+    min-height: var(--hit);
+  }
+
+  .sheetHead {
+    padding-inline-start: var(--gutter);
+  }
+
+  .sheetBody,
+  .sheetFoot {
+    padding-inline: var(--gutter);
   }
 }

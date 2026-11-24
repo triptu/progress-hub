@@ -3,7 +3,8 @@
  *
  * Three layers:
  *   Page      what a progress.md says, parsed. No times, nothing derived.
- *   Journal   what the hub saw change, appended to <work>/.history.jsonl. The only source of times.
+ *   Journal   what the hub saw change, appended to <work>/.history.jsonl. The only source of times. `progress reword`
+ *             adds the one thing the hub can't see: that a line with new words is the line it was.
  *   Hub API   what the server sends the browser: pages joined with the journal and with what the harnesses know.
  */
 
@@ -79,6 +80,12 @@ export interface Page {
 // ---------------------------------------------------------------- Journal
 
 /**
+ * The parts of a page the hub reads no items from, each by its heading with a mark that changes when its
+ * text does: the goal, every freeform section, and what a list section says above its items.
+ */
+export type Parts = Readonly<Record<string, string>>;
+
+/**
  * One observed change. The hub compares each new version of a page with the last one it saw,
  * so these say what was seen, not what was meant: an item that left the page was "removed",
  * whether it was settled or deleted by mistake.
@@ -88,11 +95,25 @@ export type JournalEvent =
    * The first time the hub saw the page. Carries the items and summary already on it, so they get a time without
    * flooding the feed. The summary is null in journals written before the hub recorded it.
    */
-  | { readonly at: Instant; readonly kind: "started"; readonly items: readonly { readonly section: SectionKind; readonly item: Item }[]; readonly summary: string | null }
+  | { readonly at: Instant; readonly kind: "started"; readonly items: readonly { readonly section: SectionKind; readonly item: Item }[]; readonly summary: string | null; readonly parts?: Parts }
+  /**
+   * The page as it stood when a hub that follows edits first read it: every item's text and every part's mark,
+   * recorded without saying anything. It is written once, to a journal an earlier hub began.
+   */
+  | { readonly at: Instant; readonly kind: "noted"; readonly items: readonly { readonly section: SectionKind; readonly item: Item }[]; readonly parts: Parts }
   /** The summary was rewritten: the agent's status update. Carries the new summary as written. */
   | { readonly at: Instant; readonly kind: "summary"; readonly text: string }
   | { readonly at: Instant; readonly kind: "added"; readonly section: SectionKind; readonly item: Item }
   | { readonly at: Instant; readonly kind: "removed"; readonly section: SectionKind; readonly item: Item }
+  /**
+   * An item's text changed. Carries the item as it is now. `from` is the id it had before, when its first line
+   * was reworded: the same item under a new name, which keeps its time and the user's marks.
+   */
+  | { readonly at: Instant; readonly kind: "edited"; readonly section: SectionKind; readonly item: Item; readonly from?: string }
+  /** A Shipped item its page had as not live, or said nothing of, is now marked live. Carries the item as it is now. */
+  | { readonly at: Instant; readonly kind: "live"; readonly item: Item }
+  /** A part of the page the hub reads no items from was written, rewritten or taken away: the goal, or a section such as Ideas. */
+  | { readonly at: Instant; readonly kind: "part"; readonly heading: string; readonly change: "added" | "edited" | "removed"; readonly mark: string }
   | { readonly at: Instant; readonly kind: "done" }
   | { readonly at: Instant; readonly kind: "reopened" }
   | { readonly at: Instant; readonly kind: "pr"; readonly change: "opened" | "merged" | "closed"; readonly pr: PullRequest };
@@ -164,7 +185,7 @@ export interface WorkSummary {
   readonly machine: string | null;
   /** Over: the page says done, or every one of its sessions is settled in its harness. */
   readonly settled: boolean;
-  /** The latest journal event or the file's change time, whichever is later. */
+  /** When the latest thing the feed tells of this work happened. The file's change time on a page with no journal yet. */
   readonly lastChangeAt: Instant;
   /** One line: the latest thing that happened. */
   readonly preview: string;
@@ -177,7 +198,9 @@ export interface WorkSummary {
   /** Every agent the work has started, finished ones included. */
   readonly agents: number;
   readonly pullRequests: { readonly total: number; readonly merged: number };
-  /** Lines under Shipped. */
+  /** How much it has planned, has under way and has shipped: lines of its page, and pull requests no line names. A hub of an earlier build sends only the last. */
+  readonly next?: number;
+  readonly doing?: number;
   readonly shipped: number;
   /** Opens the owning session in its harness. Null when the work has none. */
   readonly threadLink: string | null;
@@ -235,7 +258,7 @@ export interface FeedEntry {
 
 /**
  * What the user can mark in the hub. "viewed" holds what shipped that they have looked at: `<work>/<item id>`
- * for a Shipped line, or a pull request's address when it merged with no line about it. "dismissed" holds Needs you items they waved away.
+ * for a Shipped line, or a pull request's address when it merged with no line about it (`prKey`). "dismissed" holds Needs you items they waved away.
  */
 export type MarkKind = "viewed" | "dismissed";
 export type Marks = Readonly<Record<MarkKind, readonly string[]>>;
@@ -265,14 +288,14 @@ export type TodoChange =
   | { readonly op: "restore"; readonly todo: Todo };
 
 /**
- * One thing a work has in progress or planned next: an item of its page's In progress or Next section, or,
- * in progress only, a pull request still open that no item names.
+ * One thing a work has planned, has in progress or has shipped: an item of its page's Next, In progress or
+ * Shipped section, or a pull request no item names, in progress while it is open and shipped once it merged.
  */
 export type PlanEntry = {
   readonly work: WorkId;
   readonly workTitle: string;
   readonly project: string | null;
-  readonly state: "doing" | "next";
+  readonly state: "next" | "doing" | "shipped";
 } & ({ readonly item: RenderedItem; readonly pr: null } | { readonly item: null; readonly pr: PullRequest });
 
 export interface HubState {
@@ -282,6 +305,8 @@ export interface HubState {
   readonly needs: readonly NeedEntry[];
   /** What each work has in progress and planned, works in the order above and items in the order their page lists them. */
   readonly plan: readonly PlanEntry[];
+  /** What each work shipped lately, in the same order. A work's own page holds everything it ever shipped. */
+  readonly shipped: readonly PlanEntry[];
   /** Newest first, capped. */
   readonly feed: readonly FeedEntry[];
   /** The newest of all media, for the sidebar. The whole list is served on its own, at /api/media. */
@@ -292,9 +317,15 @@ export interface HubState {
   readonly stores: readonly { readonly id: string; readonly label: string; readonly health: Health }[];
   /** Each harness the hub reads agents from, and whether it can be read. */
   readonly sources: readonly { readonly id: string; readonly label: string; readonly health: Health }[];
+  /** The machine this hub runs on, when it keeps works of its own: its name, and the central hub it sends them to when it is linked to one, with whether the last send went through. */
+  readonly machine?: { readonly label: string; readonly central: { readonly url: string; readonly health: Health } | null };
   readonly marks: Marks;
   /** The user's own list, newest first. */
   readonly todos: readonly Todo[];
+  /** True when this hub takes no change to the todos, so the app offers no control for one. A central hub takes marks, as orders for the machines, and not todos. */
+  readonly todosReadOnly?: boolean;
+  /** True when this hub is behind a sign-in: the app offers a way to sign out, and keeps none of its answers in the tab's storage. */
+  readonly signedIn?: boolean;
 }
 
 /** An image, a video, or an HTML page (a built option or a mock) that a work's page shows. */
@@ -310,6 +341,15 @@ export interface Media {
   readonly at: Instant;
 }
 
+/** What a Shipped item's page says about it being where the user would try it: deployed, released, installed. */
+export interface Live {
+  readonly on: boolean;
+  /** The page's words after the mark: where it is live, or what it waits on. Empty when it gave none. */
+  readonly note: Html;
+  /** When the hub saw it go live. Null while it is not, and for one that was live when the hub first read it with no time to give. */
+  readonly at: Instant | null;
+}
+
 export interface RenderedItem {
   readonly id: string;
   readonly title: string;
@@ -321,6 +361,10 @@ export interface RenderedItem {
   readonly important: boolean;
   /** When the hub first saw it. Null on a page the hub has not journalled yet. */
   readonly since: Instant | null;
+  /** When the text under its title last changed after that. Null when it reads as it first did. */
+  readonly editedAt: Instant | null;
+  /** Whether the user can try what a Shipped item describes, as its page says. Null when the page does not say, or the item has not shipped. */
+  readonly live: Live | null;
   /** The pull requests a Shipped item names, in the order it names them. Only those the hub has details for. */
   readonly prs: readonly PullRequest[];
   /** The same for the commits it links. */
@@ -331,12 +375,15 @@ export interface RenderedSection {
   readonly heading: string;
   readonly kind: SectionKind | null;
   readonly html: Html;
+  /** When the hub saw the section's own text written or rewritten: all of a freeform section, and what a list section says above its items. Null when it has not changed since the hub first read it. */
+  readonly changedAt: Instant | null;
   readonly items: readonly RenderedItem[];
 }
 
 export interface WorkBody {
   readonly goal: Html;
   readonly summary: Html;
+  /** Every section but Goal. A work's Home draws Decisions and the ones the hub reads no items from, and its plan is made from the rest. */
   readonly sections: readonly RenderedSection[];
 }
 

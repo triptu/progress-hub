@@ -1,0 +1,78 @@
+# The progress hub: its checks on every pull request, and on main a deploy of the central hub.
+# The repository is what is deployed. Everything about whose hub it is comes from the repository's secrets and
+# variables, so none of it is written here: without them the deploy is skipped.
+#
+#   Secrets:   CLOUDFLARE_API_TOKEN, PROGRESS_SESSION_KEY, PROGRESS_MACHINE_KEY, PROGRESS_ALLOW
+#   Variables: CLOUDFLARE_ACCOUNT_ID, PROGRESS_GOOGLE_CLIENT_ID, and for a domain PROGRESS_DOMAIN and PROGRESS_ZONE
+name: Progress hub
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - name: Types and tests
+        run: |
+          bun install --frozen-lockfile
+          bun run check
+          bun test
+      - name: The deploy's own types
+        working-directory: cloud
+        run: |
+          bun install --frozen-lockfile
+          bun run check
+
+  deploy:
+    needs: check
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.CLOUDFLARE_ACCOUNT_ID != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # One deploy at a time, and each one finishes: the newest commit deploys last.
+    concurrency:
+      group: progress-central-deploy
+      cancel-in-progress: false
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      DOMAIN: ${{ vars.PROGRESS_DOMAIN }}
+      ZONE: ${{ vars.PROGRESS_ZONE }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      # An older commit whose checks finished late must not deploy over a newer one.
+      - name: Only main's newest commit deploys
+        id: newest
+        run: |
+          head=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "$head" = "$GITHUB_SHA" ]; then echo "is=true" >> "$GITHUB_OUTPUT"; else echo "main has moved on to $head: this commit is not deployed."; fi
+      - name: Install
+        if: steps.newest.outputs.is == 'true'
+        run: |
+          bun install --frozen-lockfile
+          bun install --frozen-lockfile --cwd cloud
+      # The script asks the hub that is live whether it takes these keys before it uploads anything, and asks what
+      # it deployed again after: closed to someone signed out, and readable by someone signed in.
+      - name: Deploy the central hub
+        if: steps.newest.outputs.is == 'true'
+        working-directory: cloud
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PROGRESS_SESSION_KEY: ${{ secrets.PROGRESS_SESSION_KEY }}
+          PROGRESS_MACHINE_KEY: ${{ secrets.PROGRESS_MACHINE_KEY }}
+          ALLOW: ${{ secrets.PROGRESS_ALLOW }}
+          GOOGLE_CLIENT_ID: ${{ vars.PROGRESS_GOOGLE_CLIENT_ID }}
+        run: bun run deploy -- --workflow --account "$CLOUDFLARE_ACCOUNT_ID" --allow "$ALLOW" --google-client-id "$GOOGLE_CLIENT_ID" ${DOMAIN:+--domain "$DOMAIN"} ${ZONE:+--zone "$ZONE"}

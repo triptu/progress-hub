@@ -106,7 +106,7 @@
   padding: var(--s3);
   border: 1px solid var(--line);
   border-radius: var(--r-m);
-  background: var(--side);
+  background: var(--raise);
   overflow-x: auto;
 }
 
@@ -150,7 +150,9 @@
   vertical-align: top;
 }
 
+/* A picture opens large. */
 .prose a.fig {
+  cursor: zoom-in;
   display: inline-block;
   max-width: 100%;
   vertical-align: top;
@@ -163,7 +165,7 @@
   max-width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--r-m);
-  background: var(--side);
+  background: var(--raise);
 }
 
 .prose img {

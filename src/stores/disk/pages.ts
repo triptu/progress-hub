@@ -1,10 +1,10 @@
 import { appendFileSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { isMissing, listWorks, readSessions, type WorkFolder } from "../../core/home.ts";
-import { instant, pageEvents, pullRequestEvents, readJournal, replay, writeJournal, type PullRequestSighting } from "../../core/journal.ts";
-import { mediaRefs, parsePage, splitItem, type MediaRef } from "../../core/parse.ts";
-import { reason } from "../../core/text.ts";
-import type { Health, Html, JournalEvent, Media, Page, RenderedSection, SessionRef, WorkBody, WorkId } from "../../core/types.ts";
+import { instant, pageEvents, partNames, pullRequestEvents, readJournal, replay, writeJournal, type PullRequestSighting } from "../../core/journal.ts";
+import { mediaRefs, parsePage, type MediaRef } from "../../core/parse.ts";
+import { liveMark, reason, splitItem, withoutLiveMark } from "../../core/text.ts";
+import type { Health, Html, Instant, JournalEvent, Live, Media, Page, RenderedSection, SessionRef, WorkBody, WorkId } from "../../core/types.ts";
 import { findMedia, newestFirst } from "./media.ts";
 import { renderInline, renderMarkdown } from "./render.ts";
 
@@ -213,15 +213,19 @@ export class Pages {
   private renderBody(work: WorkId, page: Page, events: readonly JournalEvent[]): WorkBody {
     const dir = join(this.home, work);
     const seen = replay(events);
-    const sections: RenderedSection[] = page.sections.map((section) => ({
+    const names = partNames(page);
+    const sections: RenderedSection[] = page.sections.map((section, index) => ({
       heading: section.heading,
       kind: section.kind,
       html: renderMarkdown(section.markdown, work, dir),
+      changedAt: seen.parts?.get(names[index] ?? "")?.at ?? null,
       items: section.items.map((item) => ({
         id: item.id,
         title: item.title,
-        ...renderItem(item.markdown, work, dir),
+        ...renderItem(item.markdown, work, dir, section.kind === "shipped"),
         since: seen.items.get(item.id)?.since ?? null,
+        editedAt: seen.items.get(item.id)?.editedAt ?? null,
+        live: section.kind === "shipped" ? liveOf(item.markdown, seen.items.get(item.id)?.liveAt ?? null, work, dir) : null,
         prs: [],
         commits: [],
       })),
@@ -230,7 +234,13 @@ export class Pages {
   }
 }
 
-export function renderItem(markdown: string, work: WorkId, dir: string): { titleHtml: Html; html: Html; important: boolean } {
+/** An item's title line and what is under it, as HTML. A Shipped item's line about being live is left out: the hub shows it as a mark. */
+export function renderItem(markdown: string, work: WorkId, dir: string, shipped = false): { titleHtml: Html; html: Html; important: boolean } {
   const { title, body, important } = splitItem(markdown);
-  return { titleHtml: renderInline(title, work, dir), html: renderMarkdown(body, work, dir), important };
+  return { titleHtml: renderInline(title, work, dir), html: renderMarkdown(shipped ? withoutLiveMark(body) : body, work, dir), important };
+}
+
+function liveOf(markdown: string, at: Instant | null, work: WorkId, dir: string): Live | null {
+  const mark = liveMark(markdown);
+  return mark && { on: mark.on, note: renderInline(mark.note, work, dir), at: mark.on ? at : null };
 }

@@ -1,96 +1,171 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { MagnifyingGlassIcon, MoonIcon, SunIcon, WarningIcon } from "@phosphor-icons/react";
-import type { FeedEntry, Health, HubState, NeedEntry, WorkId } from "../core/types.ts";
+import { DevicesIcon, MagnifyingGlassIcon, MoonIcon, SidebarSimpleIcon, SunIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
+import { planOf } from "../core/plan.ts";
+import type { FeedEntry, Instant, NeedEntry, WorkId, WorkSummary } from "../core/types.ts";
+import { cardMatches, freshness, needCard, planCards } from "./lib/board.ts";
+import type { BoardCard } from "./lib/board.ts";
+import { devicesOf } from "./lib/devices.ts";
 import { useDismissed } from "./lib/dismissed.ts";
-import { describe, feedMatches, groupFeed, onceEach, shippedOf, shippedToday } from "./lib/feed.ts";
+import { groupFeed, rowMatches, rowsOf, rowsSince } from "./lib/feed.ts";
 import { useMarks, useUnsavedMark } from "./lib/marks.ts";
 import { byKind, mediaDays, mediaItems } from "./lib/media.ts";
 import type { MediaItem, MediaKind } from "./lib/media.ts";
 import { matches, needKey, needText } from "./lib/needs.ts";
 import { usePersisted } from "./lib/persist.ts";
 import { keepLooks, projectLooks, readKeptLooks } from "./lib/project.ts";
-import { navigate, placeToReturnTo, routeHref, TABS, useRoute } from "./lib/route.ts";
+import { close, navigate, placeToReturnTo, routeHref, showMedia, TABS, useRoute } from "./lib/route.ts";
 import type { Tab } from "./lib/route.ts";
 import { listenForChanges, useHub, useMedia, useReachable, useWork } from "./lib/store.ts";
 import { useTheme } from "./lib/theme.ts";
-import { clock, exact, isToday, useNow } from "./lib/time.ts";
-import { isUnread, markSeen, useSeen } from "./lib/unread.ts";
+import { useNow } from "./lib/time.ts";
+import { BOARD_SEEN, isUnread, markSeen, useSeen } from "./lib/unread.ts";
 import { splitWorks, workMatches } from "./lib/works.ts";
 import { Board } from "./views/Board.tsx";
+import { Devices } from "./views/Devices.tsx";
 import { Empty } from "./views/Empty.tsx";
 import { Feed } from "./views/Feed.tsx";
+import { Home } from "./views/Home.tsx";
 import { Artifacts, Media, Viewer } from "./views/Media.tsx";
-import { Needs } from "./views/Needs.tsx";
-import { Plan } from "./views/Plan.tsx";
 import { Todos } from "./views/Todos.tsx";
 import { todosFor } from "./lib/todos.ts";
 import { Link, ProjectLooks } from "./views/parts.tsx";
 import { Resizer, Sidebar } from "./views/Sidebar.tsx";
-import { freshCount, Goal, WorkHead, WorkPage } from "./views/WorkPage.tsx";
+import { Goal, WorkHead, WorkPage } from "./views/WorkPage.tsx";
 import s from "./App.module.css";
 
-const OK: Health = { ok: true };
 const SIDE = { initial: 288, min: 240, max: 480 };
 const NO_MEDIA: readonly MediaItem[] = [];
+const NO_NEEDS: readonly NeedEntry[] = [];
 
 const readWidth = (stored: unknown) => (typeof stored === "number" && stored >= SIDE.min && stored <= SIDE.max ? stored : SIDE.initial);
 const readOpen = (stored: unknown) => stored === true;
+const readShown = (stored: unknown) => stored !== false;
 
-/** The first tab is everything about where you are: all ongoing work on Home, the whole page on a work. */
-const TAB_LABEL: Record<Tab, string> = { main: "Ongoing", needs: "Needs you", todos: "Todos", "in-progress": "In progress", next: "Next up", shipped: "Shipped", activity: "Activity", media: "Media" };
+/** The tabs are the same for everything and for one work. Home is where each starts: every ongoing work, or the work's own page. */
+const TAB_LABEL: Record<Tab, string> = { main: "Home", board: "Board", activity: "Activity", media: "Media" };
+
+const later = (a: Instant, b: Instant): Instant => (Date.parse(a) > Date.parse(b) ? a : b);
 
 export function App() {
   const route = useRoute();
   const hub = useHub();
   const workId = route.work;
   const detail = useWork(workId);
-  const media = useMedia(route.tab === "media" || workId !== null);
+  // A screen that shows media asks for it at once. Any other asks once its own state is in, so a picture pressed on a card or in the feed opens without a wait.
+  const media = useMedia(route.tab === "media" || workId !== null || route.open !== null || hub !== null);
   const now = useNow();
   const seen = useSeen();
   const dismissed = useDismissed();
+  const reachable = useReachable();
+  // The machines the hub shows work from and what the hub depends on. The bar's button says the worst of it.
+  const devices = useMemo(() => devicesOf(hub, reachable), [hub, reachable]);
+  // Asked for from the bar. It is about the whole hub, so it opens over whatever is on screen, not in its place.
+  const [devicesOpen, setDevicesOpen] = useState(false);
   const viewed = useMarks("viewed");
   const [query, setQuery] = useState("");
   const [sideWidth, setSideWidth] = usePersisted("progress:side-width", readWidth);
   const [settledOpen, setSettledOpen] = usePersisted("progress:settled-open", readOpen);
+  const [sideShown, setSideShown] = usePersisted("progress:side-shown", readShown);
+  // A phone has no room for the sidebar beside the screen. There it is a drawer over it, opened to pick a work and gone once one is picked.
+  const [drawer, setDrawer] = useState(false);
+  const drawerSwitch = useRef<HTMLButtonElement>(null);
+  useEffect(() => setDrawer(false), [route.work, route.tab]);
+  useEffect(() => {
+    if (!drawer) return;
+    const main = document.querySelector<HTMLElement>(".main");
+    if (main) main.inert = true;
+    document.querySelector<HTMLElement>("#side a")?.focus({ preventScroll: true });
+    const onKey = (event: KeyboardEvent) => (event.key === "Escape" ? setDrawer(false) : undefined);
+    window.addEventListener("keydown", onKey);
+    // Picking the work that is already open goes nowhere, and still closes the drawer.
+    const side = document.getElementById("side");
+    const onPick = (event: MouseEvent) => (event.target instanceof Element && event.target.closest("a") ? setDrawer(false) : undefined);
+    side?.addEventListener("click", onPick);
+    // A window made wide again has its sidebar back, and no drawer.
+    const phone = matchMedia("(max-width: 760px)");
+    const onWide = () => (phone.matches ? undefined : setDrawer(false));
+    phone.addEventListener("change", onWide);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      side?.removeEventListener("click", onPick);
+      phone.removeEventListener("change", onWide);
+      if (main) main.inert = false;
+      drawerSwitch.current?.focus({ preventScroll: true });
+    };
+  }, [drawer]);
+  // The slide is for the switch. A page that opens with the sidebar hidden just opens.
+  const [sideMoved, setSideMoved] = useState(false);
+  const toggleSide = useCallback(() => {
+    setSideMoved(true);
+    setSideShown(!sideShown);
+  }, [sideShown, setSideShown]);
   const app = useRef<HTMLDivElement>(null);
   const screen = useRef<HTMLElement>(null);
   const search = useRef<HTMLInputElement>(null);
 
   useEffect(listenForChanges, []);
+  // A picture in a page opens large over the hub, where it is, and not in a tab of its own. A click with a key held still opens the file.
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const src = event.target instanceof Element ? event.target.closest("a.fig")?.getAttribute("href") : null;
+      if (!src?.startsWith("/files/")) return;
+      event.preventDefault();
+      showMedia(src);
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
+      // An open dialog has the keys.
+      if (document.querySelector("dialog[open]")) return;
       if ((event.key === "/" && !typing) || (event.key === "k" && (event.metaKey || event.ctrlKey))) {
         event.preventDefault();
         search.current?.focus();
         search.current?.select();
       }
+      if (event.key === "[" && !typing && !event.metaKey && !event.ctrlKey && !event.altKey) toggleSide();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [toggleSide]);
 
-  const works = hub?.works ?? null;
+  // An ask the user marked done is off every list and every count. Its page still holds it, and the hub does not change a page.
+  const allNeeds = hub?.needs ?? NO_NEEDS;
+  const asks = useMemo(() => allNeeds.filter((entry) => !dismissed.has(needKey(entry))), [allNeeds, dismissed]);
+  const works = useMemo(() => {
+    if (!hub) return null;
+    const waiting = new Map<WorkId, number>();
+    for (const entry of asks) if (entry.work) waiting.set(entry.work, (waiting.get(entry.work) ?? 0) + 1);
+    return hub.works.map((work): WorkSummary => ({ ...work, needsCount: waiting.get(work.id) ?? 0 }));
+  }, [hub?.works, asks]);
   const { ongoing, settled } = useMemo(() => splitWorks(works ?? []), [works]);
   const settledIds = useMemo(() => new Set(settled.map((work) => work.id)), [settled]);
-  const allNeeds = hub?.needs ?? [];
-  // What still counts: on ongoing work, or from an agent no page claims.
+  // What still counts across everything: on ongoing work, or from an agent no page claims.
   const isOpen = (entry: NeedEntry) => entry.work === null || !settledIds.has(entry.work);
-  const openNeeds = allNeeds.filter(isOpen);
+  const openNeeds = asks.filter(isOpen);
   useEffect(() => {
     document.title = openNeeds.length ? `(${openNeeds.length}) Progress` : "Progress";
   }, [openNeeds.length]);
 
   const summary = works?.find((work) => work.id === workId) ?? detail?.summary ?? null;
-  // Read before the effect below records this visit, so the page can mark what is new since the last one.
+  // Read before the effects below record this visit, so the screen can mark what is new since the last one.
   const seenBefore = useMemo(() => (workId ? (seen.works[workId] ?? seen.since) : seen.since), [workId]);
+  const onBoard = workId === null && route.tab === "board";
+  const boardSeenBefore = useMemo(() => seen.works[BOARD_SEEN] ?? seen.since, [onBoard]);
   useEffect(() => {
     if (summary) markSeen(summary.id, summary.lastChangeAt);
   }, [summary?.id, summary?.lastChangeAt]);
+  const newest = works?.[0]?.lastChangeAt;
+  useEffect(() => {
+    if (onBoard && newest) markSeen(BOARD_SEEN, newest);
+  }, [onBoard, newest]);
 
   const loaded = hub !== null && (workId === null || detail !== null);
-  // Opening one of the media large keeps the grid where it was.
+  // Opening one of the media large, or a card of the board, keeps the screen where it was.
   const routeKey = routeHref({ work: route.work, tab: route.tab, focus: route.focus });
   useLayoutEffect(() => {
     for (const marked of screen.current?.querySelectorAll(".spot") ?? []) marked.classList.remove("spot");
@@ -100,8 +175,15 @@ export function App() {
       screen.current?.scrollTo({ top: back });
       return;
     }
-    if (workId !== null && route.tab === "main" && route.focus) {
-      const target = screen.current?.querySelector(`[src="${CSS.escape(route.focus)}"], [src^="${CSS.escape(`${route.focus}?v=`)}"]`);
+    // A part of the screen by its name: the todos, a lane of the board.
+    const named = route.focus ? document.getElementById(route.focus) : null;
+    if (named) {
+      named.scrollIntoView({ block: "start", inline: "start" });
+      return;
+    }
+    if (route.tab === "main" && route.focus) {
+      // On a work's Home, one of its media.
+      const target = workId === null ? null : screen.current?.querySelector(`[src="${CSS.escape(route.focus)}"], [src^="${CSS.escape(`${route.focus}?v=`)}"]`);
       if (target) {
         for (let fold = target.closest("details"); fold; fold = fold.parentElement?.closest("details") ?? null) fold.open = true;
         (target.closest(".fig") ?? target).classList.add("spot");
@@ -109,9 +191,7 @@ export function App() {
         return;
       }
     }
-    const target = route.tab === "needs" && route.focus ? document.getElementById(route.focus) : null;
-    if (target) target.scrollIntoView({ block: "start" });
-    else screen.current?.scrollTo({ top: 0 });
+    screen.current?.scrollTo({ top: 0 });
     // Scroll only when the screen changes, or once its data first arrives.
   }, [routeKey, loaded]);
 
@@ -122,20 +202,37 @@ export function App() {
 
   // One work's feed is whole. Home's is the newest of everything.
   const feed = (workId === null ? hub?.feed : detail?.feed) ?? [];
-  const inScope = (entry: NeedEntry) => workId === null || entry.work === workId;
-  const shownNeeds = allNeeds.filter((entry) => inScope(entry) && matches(query, needText(entry)));
   // An ask is still open while the hub lists it. One that has left its page shows in the feed as something that was asked.
   const openKeys = useMemo(() => new Set(allNeeds.filter(isOpen).map(needKey)), [allNeeds, settledIds]);
   const stillOpen = useCallback((entry: FeedEntry) => entry.event.kind === "added" && openKeys.has(`${entry.work}:${entry.event.item.id}`), [openKeys]);
-  const activityDays = useMemo(() => groupFeed(onceEach(feed).filter((entry) => feedMatches(entry, query)), now, stillOpen), [feed, query, now, stillOpen]);
-  const shipped = useMemo(() => shippedOf(feed), [feed]);
-  const shippedDays = useMemo(() => groupFeed(shipped.filter((entry) => feedMatches(entry, query)), now), [shipped, query, now]);
-  const today = useMemo(() => shippedToday(hub?.feed ?? [], now), [hub?.feed, now]);
-  // What is in progress and what is planned: one work's on its tabs, and on Home every ongoing work's.
-  const plan = useMemo(
-    () => (hub?.plan ?? []).filter((entry) => (workId === null ? !settledIds.has(entry.work) : entry.work === workId) && matches(query, entry.workTitle, entry.project, entry.item === null ? `#${entry.pr.number} ${entry.pr.title}` : entry.item.title)),
-    [hub?.plan, workId, settledIds, query],
+  const rows = useMemo(() => rowsOf(feed, stillOpen), [feed, stillOpen]);
+  const activityDays = useMemo(() => groupFeed(rows.filter((row) => rowMatches(row, query)), now), [rows, query, now]);
+  const hasImportant = useMemo(() => rows.some((row) => row.line.weight === "high"), [rows]);
+  // What the feed tells of the open work since it was last opened: the reason its dot was lit.
+  const since = useMemo(() => (workId !== null && detail?.summary.id === workId ? rowsSince(rows, seenBefore) : []), [rows, workId, detail?.summary.id, seenBefore]);
+
+  // The open work's plan, from its page, which has all it ever shipped. Null until the page has loaded.
+  const workPlan = useMemo(() => (detail && detail.summary.id === workId ? planOf({ work: detail.summary.id, workTitle: detail.summary.title, project: detail.summary.project }, detail.body.sections, detail.pullRequests) : null), [detail, workId]);
+  // The board's cards: across everything, what ongoing work holds; on a work, all of its own.
+  const { cards, doneCards, asking } = useMemo(() => {
+    const inScope = (entry: NeedEntry) => (workId === null ? isOpen(entry) : entry.work === workId);
+    // Across everything, what the hub's state holds. On a work, its own plan once its page has loaded, and until then the part of it the state holds.
+    const held = [...(hub?.plan ?? []), ...(hub?.shipped ?? [])];
+    const plan = workId === null ? held.filter((entry) => !settledIds.has(entry.work)) : (workPlan ?? held.filter((entry) => entry.work === workId));
+    const shown = (card: BoardCard) => cardMatches(card, query);
+    return {
+      // How many asks wait here, whatever the filter shows of them.
+      asking: asks.filter(inScope).length,
+      cards: [...asks.filter(inScope).map(needCard), ...planCards(plan)].filter(shown),
+      doneCards: allNeeds.filter((entry) => inScope(entry) && dismissed.has(needKey(entry))).map(needCard).filter(shown),
+    };
+  }, [hub?.plan, hub?.shipped, workPlan, workId, asks, allNeeds, dismissed, settledIds, query]);
+  // On a work a card is new since the work was last opened. Across everything it is new since the board was, or the work.
+  const freshOf = useCallback(
+    (card: BoardCard) => freshness(card.at, card.editedAt, workId !== null ? seenBefore : later(boardSeenBefore, (card.work && seen.works[card.work]) || seen.since)),
+    [workId, seenBefore, boardSeenBefore, seen],
   );
+  const boardHref = useCallback((card: string | null) => routeHref({ work: workId, tab: "board", card }), [workId]);
   const allMedia = useMemo(() => (media && works ? mediaItems(media, works, "") : null), [media, works]);
   const workMedia = useMemo(() => allMedia?.filter((item) => item.work === workId) ?? NO_MEDIA, [allMedia, workId]);
   const [mediaKinds, setMediaKinds] = useState<ReadonlySet<MediaKind>>(new Set());
@@ -146,10 +243,10 @@ export function App() {
     return all ? byKind(all, mediaKinds) : null;
   }, [allMedia, workMedia, workId, mediaKinds]);
   const shownMedia = useMemo(() => listed?.items.filter((item) => matches(query, item.label, item.workTitle, item.project)) ?? null, [listed, query]);
-  // The viewer opens over whatever tab holds the tile, and closing it leaves the user there.
-  const mediaHref = useCallback((open: string | null) => routeHref({ work: workId, tab: route.tab, open }), [workId, route.tab]);
+  // The viewer opens over whatever holds the picture, a tab or an open card, and closing it leaves the user there.
+  const mediaHref = useCallback((open: string | null) => routeHref({ work: workId, tab: route.tab, card: route.card, open }), [workId, route.tab, route.card]);
   const moveMedia = useCallback((item: MediaItem) => navigate(mediaHref(item.src), true), [mediaHref]);
-  const closeMedia = useCallback(() => navigate(mediaHref(null), true), [mediaHref]);
+  const closeMedia = useCallback(() => close(mediaHref(null)), [mediaHref]);
   // A project keeps the icon and colour it was first given, so it reads as the same project every day.
   const [storedLooks, storeLooks] = usePersisted("progress:looks", readKeptLooks);
   const keptLooks = useMemo(() => keepLooks((works ?? []).map((work) => work.project ?? work.id), storedLooks), [works, storedLooks]);
@@ -161,49 +258,55 @@ export function App() {
   // The work being read stays in the sidebar whatever the filter says.
   const shownOngoing = ongoing.filter((work) => work.id === workId || workMatches(work, query));
   const shownSettled = settled.filter((work) => work.id === workId || workMatches(work, query));
-  const hasImportant = useMemo(() => onceEach(feed).some((entry) => describe(entry, stillOpen)?.weight === "high"), [feed, stillOpen]);
   const unread = (work: Parameters<typeof isUnread>[0]) => isUnread(work, seen);
   const unreadSources = useMemo(() => (hub?.sources ?? []).filter((source) => !source.health.ok).map((source) => source.label), [hub?.sources]);
   const noWork = works !== null && works.length === 0 && (hub?.home.ok ?? true);
-  // On settled work every item is a leftover, and the dismissed ones no longer count.
-  const scopedCount = allNeeds.filter((entry) => inScope(entry) && (isOpen(entry) || (workId !== null && !dismissed.has(needKey(entry))))).length;
-  // Needs you carries a dot while something waits on the user.
-  const waiting = summary?.settled ? 0 : workId === null ? openNeeds.length : scopedCount;
-  // The user's own list: one work's on its tabs, everything on Home. The tab counts what is still to do.
+  // The board carries a dot while something waits on the user.
+  const waiting = workId === null ? openNeeds.length : summary?.settled ? 0 : asks.filter((entry) => entry.work === workId).length;
+  // The user's own list: one work's on its Home, everything on Home.
   const todos = useMemo(() => todosFor(hub?.todos ?? [], works ?? [], workId, query), [hub?.todos, works, workId, query]);
-  const allToDo = useMemo(() => (hub?.todos ?? []).filter((todo) => todo.doneAt === null).length, [hub?.todos]);
-  const toDo = useMemo(() => todosFor(hub?.todos ?? [], works ?? [], workId, "").filter((todo) => todo.doneAt === null).length, [hub?.todos, works, workId]);
-  const fresh = useMemo(() => freshCount(detail, seenBefore), [detail, seenBefore]);
+  const todoList = <Todos todos={todos} works={works ?? []} scope={workId} query={query} />;
 
   return (
     <ProjectLooks value={looks}>
-      <div className="app" ref={app} style={{ "--side-w": `${sideWidth}px`, ...(summary ? { "--here": looks(summary.project ?? summary.id).colour } : {}) } as CSSProperties}>
-        <Sidebar
-          ongoing={works === null ? null : shownOngoing}
-          settled={shownSettled}
-          hasSettled={settled.length > 0}
-          current={workId}
-          searching={query.trim() !== ""}
-          isUnread={unread}
-          needs={openNeeds.length}
-          todos={allToDo}
-          settledOpen={settledOpen}
-          onSettledOpen={setSettledOpen}
-          now={now}
-        />
-        <Resizer width={sideWidth} {...SIDE} onPreview={(width) => app.current?.style.setProperty("--side-w", `${width}px`)} onCommit={setSideWidth} />
+      <div className="app" ref={app} data-side={sideShown ? undefined : "closed"} data-side-moved={sideMoved ? "" : undefined} data-drawer={drawer ? "" : undefined} style={{ "--side-w": `${sideWidth}px` } as CSSProperties}>
+        <Sidebar ongoing={works === null ? null : shownOngoing} settled={shownSettled} hasSettled={settled.length > 0} shown={sideShown || drawer} current={workId} searching={query.trim() !== ""} isUnread={unread} needs={openNeeds.length} settledOpen={settledOpen} onSettledOpen={setSettledOpen} now={now} />
+        {sideShown ? (
+          <Resizer
+            width={sideWidth}
+            {...SIDE}
+            onPreview={(width) => app.current?.style.setProperty("--side-w", `${width}px`)}
+            onCommit={setSideWidth}
+          />
+        ) : null}
+        {/* The sidebar's switch and the brand stand in the window's corner, whether the sidebar is there or not. */}
+        <div className="corner">
+          <button type="button" className="icon-btn" aria-expanded={sideShown} aria-controls="side" aria-label={sideShown ? "Hide the sidebar" : "Show the sidebar"} title={`${sideShown ? "Hide" : "Show"} the sidebar. Key: [`} onClick={toggleSide}>
+            <SidebarSimpleIcon aria-hidden />
+          </button>
+          <Link href={routeHref({ work: null, tab: route.tab })} className="brand">
+            <span className="brand-mark" aria-hidden />
+            progress
+          </Link>
+        </div>
+        {drawer ? <div className="drawer-scrim" onClick={() => setDrawer(false)} /> : null}
         <div className="main">
           <header className="topbar">
+            <button ref={drawerSwitch} type="button" className="icon-btn drawer-switch" aria-expanded={drawer} aria-controls="side" aria-label="Show the list of work" title="Show the list of work" onClick={() => setDrawer(true)}>
+              <SidebarSimpleIcon aria-hidden />
+            </button>
             <Link href={routeHref({ work: null, tab: route.tab })} className="brand">
               <span className="brand-mark" aria-hidden />
               progress
             </Link>
-            <nav className={s.tabs} aria-label={workId === null ? "Home" : (summary?.title ?? "Work")}>
+            <nav className={s.tabs} aria-label={workId === null ? "Everything" : (summary?.title ?? "Work")}>
               {TABS.map((tab) => (
                 <Link key={tab} href={routeHref({ work: workId, tab })} className={s.tab} current={route.tab === tab}>
-                  {tab === "main" && workId !== null ? "All" : TAB_LABEL[tab]}
-                  {tab === "needs" && waiting > 0 ? <span className={s.tabDot} role="img" aria-label={`${waiting} waiting`} title={`${waiting} waiting on you`} /> : null}
-                  {tab === "todos" && toDo > 0 ? <span className="n">{toDo}</span> : null}
+                  {/* The dot hangs off the word's corner and takes no room, so a tab is as wide with it as without, and its word stays in the middle. */}
+                  <span className={s.tabName}>
+                    {TAB_LABEL[tab]}
+                    {tab === "board" && waiting > 0 ? <span className={s.tabDot} role="img" aria-label={waiting === 1 ? "1 needs you" : `${waiting} need you`} title={waiting === 1 ? "1 needs you" : `${waiting} need you`} /> : null}
+                  </span>
                 </Link>
               ))}
             </nav>
@@ -222,53 +325,59 @@ export function App() {
                   event.currentTarget.blur();
                 }}
               />
-              <kbd aria-hidden>/</kbd>
+              {query ? (
+                <button
+                  type="button"
+                  className={s.searchClear}
+                  aria-label="Clear the filter"
+                  title="Clear the filter"
+                  onClick={() => {
+                    setQuery("");
+                    search.current?.focus();
+                  }}
+                >
+                  <XIcon aria-hidden />
+                </button>
+              ) : (
+                <kbd aria-hidden>/</kbd>
+              )}
             </label>
+            {/* What can't be reached is said here, in a dot, and never in a line that takes room from the screen. */}
+            <button type="button" className={`icon-btn ${s.devices}`} aria-haspopup="dialog" aria-expanded={devicesOpen} aria-label={devices.trouble ? `Devices. ${devices.trouble}` : "Devices"} title={devices.trouble ? `Devices. ${devices.trouble}` : "Devices"} onClick={() => setDevicesOpen(true)}>
+              <DevicesIcon aria-hidden />
+              {devices.worst === "ok" ? null : <span className={s.devicesDot} data-status={devices.worst} />}
+            </button>
             <ThemeSwitch />
           </header>
-          <Trouble home={hub?.home ?? OK} sources={hub?.sources ?? []} stores={hub?.stores ?? []} />
           <main className="screen" ref={screen}>
             {noWork ? <Empty /> : workId === null ? home() : work(workId)}
           </main>
           {viewer()}
+          <Unsaved />
+          {devicesOpen ? <Devices devices={devices} loaded={hub !== null} now={now} onClose={() => setDevicesOpen(false)} /> : null}
         </div>
       </div>
     </ProjectLooks>
   );
 
+  function board(head?: React.ReactNode) {
+    return (
+      <Board cards={cards} done={doneCards} asking={asking} scope={workId} loading={hub === null} whole={loaded} query={query.trim()} unread={unreadSources} freshOf={freshOf} viewed={viewed} dismissed={dismissed} open={route.card} hrefOf={boardHref} now={now}>
+        {head}
+      </Board>
+    );
+  }
+
   function home() {
     switch (route.tab) {
       case "main":
         return (
-          <Board
-            works={works === null ? null : shownOngoing}
-            settled={shownSettled}
-            needs={shownNeeds.filter(isOpen)}
-            shipped={today.filter((entry) => feedMatches(entry, query))}
-            query={query.trim()}
-            isUnread={unread}
-            viewed={viewed}
-            now={now}
-          />
+          <Home works={works === null ? null : shownOngoing} settled={shownSettled} needs={openNeeds} query={query.trim()} isUnread={unread} now={now}>
+            {works === null ? null : todoList}
+          </Home>
         );
-      case "needs":
-        return (
-          <Needs needs={shownNeeds.filter(isOpen)} settled={shownNeeds.filter((entry) => !isOpen(entry))} dismissed={dismissed} scoped={false} query={query} unread={unreadSources} sub="Across all ongoing work, oldest first" now={now} />
-        );
-      case "todos":
-        return <Todos todos={todos} works={works ?? []} scope={null} query={query} sub="Yours, for later" />;
-      case "in-progress":
-        return (
-          <Plan entries={plan.filter((entry) => entry.state === "doing")} scoped={false} tab="in-progress" empty={query ? `Nothing matches “${query}”.` : "No page lists anything as in progress, and no pull request is open."} title="In progress" sub="What each ongoing work is doing now" now={now} />
-        );
-      case "next":
-        return (
-          <Plan entries={plan.filter((entry) => entry.state === "next")} scoped={false} tab="next" empty={query ? `Nothing matches “${query}”.` : "No page lists anything under Next."} title="Next up" sub="What each ongoing work has planned, in the order its page lists it" now={now} />
-        );
-      case "shipped":
-        return (
-          <Feed days={shippedDays} only="shipped" tab="shipped" hasImportant={hasImportant} viewed={viewed} scoped={false} empty={query ? `Nothing matches “${query}”.` : "Nothing has shipped yet."} title="Shipped" sub="Across all work, newest first" now={now} />
-        );
+      case "board":
+        return board();
       case "activity":
         return (
           <Feed days={activityDays} tab="activity" hasImportant={hasImportant} viewed={viewed} scoped={false} empty={query ? `Nothing matches “${query}”.` : "Nothing has happened yet."} title="Activity" sub="What happened across all work, newest first" now={now} />
@@ -288,8 +397,10 @@ export function App() {
 
   /** One of the media shown large, over the screen it was opened from, with its neighbours in that screen's list. */
   function viewer() {
+    // On the Media tab the arrows step through what its filters show. Anywhere else they stay in the work the picture is from.
     // A document opens in a tab of its own, so the viewer steps over it.
-    const shown = (workId !== null && route.tab !== "media" ? workMedia : (shownMedia ?? [])).filter((item) => item.kind !== "file");
+    const from = route.tab === "media" || workId !== null ? null : (allMedia?.find((item) => item.src === route.open)?.work ?? null);
+    const shown = (route.tab === "media" ? (shownMedia ?? []) : workId !== null ? workMedia : (allMedia ?? []).filter((item) => item.work === from)).filter((item) => item.kind !== "file");
     const at = route.open === null ? -1 : shown.findIndex((item) => item.src === route.open);
     const item = shown[at];
     return item ? <Viewer item={item} prev={shown[at - 1] ?? null} next={shown[at + 1] ?? null} at={at + 1} of={shown.length} onMove={moveMedia} onClose={closeMedia} now={now} /> : null;
@@ -305,49 +416,36 @@ export function App() {
         </div>
       );
     }
-    const head = <WorkHead summary={summary} fresh={route.tab === "main" ? fresh : 0} now={now} />;
+    const head = <WorkHead summary={summary} now={now} />;
     const goal = <Goal html={detail?.summary.id === summary.id ? detail.body.goal : null} text={summary.goal} />;
-    const mine = allNeeds.filter((entry) => entry.work === summary.id && !(summary.settled && dismissed.has(needKey(entry))));
     const artifacts = workMedia.some((item) => item.kind !== "image") ? <Artifacts items={workMedia} scope={summary.id} /> : null;
     switch (route.tab) {
       case "main":
         return (
           <div className="wrap">
             {head}
-            <WorkPage key={summary.id} summary={summary} detail={detail} goal={goal} artifacts={artifacts} needs={mine} onDismiss={(key) => dismissed.dismiss([key])} media={workMedia} viewed={viewed} query={query} seenBefore={seenBefore} scroller={screen} now={now} />
+            <WorkPage
+              key={summary.id}
+              summary={summary}
+              detail={detail}
+              plan={workPlan ?? []}
+              goal={goal}
+              artifacts={artifacts}
+              todos={todoList}
+              needs={asks.filter((entry) => entry.work === summary.id)}
+              done={allNeeds.filter((entry) => entry.work === summary.id && dismissed.has(needKey(entry))).map(needKey)}
+              dismissed={dismissed}
+              since={since}
+              viewed={viewed}
+              query={query}
+              seenBefore={seenBefore}
+              scroller={screen}
+              now={now}
+            />
           </div>
         );
-      case "needs":
-        return (
-          <Needs needs={summary.settled ? [] : shownNeeds} settled={summary.settled ? shownNeeds : []} dismissed={dismissed} scoped query={query} unread={unreadSources} now={now}>
-            {head}
-            {goal}
-          </Needs>
-        );
-      case "todos":
-        return (
-          <Todos todos={todos} works={works ?? []} scope={summary.id} query={query} lead={goal}>
-            {head}
-          </Todos>
-        );
-      case "in-progress":
-        return (
-          <Plan entries={plan.filter((entry) => entry.state === "doing")} scoped tab="in-progress" empty={query ? `Nothing matches “${query}”.` : "The page has no In progress section, and no pull request is open."} title="In progress" lead={goal} now={now}>
-            {head}
-          </Plan>
-        );
-      case "next":
-        return (
-          <Plan entries={plan.filter((entry) => entry.state === "next")} scoped tab="next" empty={query ? `Nothing matches “${query}”.` : "The page lists nothing under Next."} title="Next up" lead={goal} now={now}>
-            {head}
-          </Plan>
-        );
-      case "shipped":
-        return (
-          <Feed days={shippedDays} only="shipped" tab="shipped" hasImportant={hasImportant} viewed={viewed} scoped empty={query ? `Nothing matches “${query}”.` : "Nothing has shipped here yet."} title="Shipped" lead={goal} aside={artifacts} now={now}>
-            {head}
-          </Feed>
-        );
+      case "board":
+        return board(head);
       case "activity":
         return (
           <Feed days={activityDays} tab="activity" hasImportant={hasImportant} viewed={viewed} scoped empty={query ? `Nothing matches “${query}”.` : "Nothing has happened here yet."} title="Activity" lead={goal} aside={artifacts} now={now}>
@@ -365,33 +463,17 @@ export function App() {
   }
 }
 
-/** Says so when the hub can't read what it shows. Nothing is drawn while all is well. */
-function Trouble(props: { readonly home: Health; readonly sources: HubState["sources"]; readonly stores: HubState["stores"] }) {
-  const reachable = useReachable();
+/** A mark the hub didn't save is said over the screen's foot for a few seconds, since the click was undone. It takes no room. */
+function Unsaved() {
   const unsaved = useUnsavedMark();
-  const lines = [
-    reachable ? null : { key: "hub", text: "Can't reach the hub. This is what it last sent.", reason: "" },
-    unsaved ? { key: "mark", text: "The hub didn't save what you just marked, so it is shown as it was. Click it again.", reason: "" } : null,
-    ...[
-      { name: "the pages", health: props.home },
-      ...props.sources.map((source) => ({ name: source.label, health: source.health })),
-    ].map(({ name, health }) =>
-      health.ok ? null : { key: name, text: `Can't read ${name} since ${isToday(health.since, Date.now()) ? clock(health.since) : exact(health.since)}. This is what was last read${name === "the pages" ? "" : ", and agents may have changed since"}.`, reason: health.reason },
-    ),
-    // Another machine that is off or asleep is no fault of the hub's: one quiet line says its work is as last heard.
-    ...props.stores.map((store) => (store.health.ok ? null : { key: `store ${store.id}`, text: `Can't reach ${store.label}. Its work is shown as it last was.`, reason: store.health.reason })),
-  ].filter((line) => line !== null);
-  if (!lines.length) return null;
   return (
-    <div className={s.trouble} role="status">
-      <div className={s.troubleIn}>
-        {lines.map((line) => (
-          <p key={line.key} title={line.reason}>
-            <WarningIcon weight="fill" aria-hidden />
-            {line.text}
-          </p>
-        ))}
-      </div>
+    <div className={s.notice} role="status">
+      {unsaved ? (
+        <p>
+          <WarningIcon weight="fill" aria-hidden />
+          Couldn't save that. Try again.
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -1,8 +1,12 @@
 import { join } from "node:path";
-import type { HubState, MarkKind, WorkId } from "../core/types.ts";
+import type { HubState, WorkId } from "../core/types.ts";
 import type { AgentSource } from "../sources/source.ts";
+import { fromOwnPage, read } from "./routes.ts";
+import { machineLabel, Sender, type Link } from "../central/send.ts";
+import { readMarkChange, type MarkOrder } from "../central/protocol.ts";
+import { ownsMark } from "../core/marks.ts";
 import { DiskStore } from "../stores/disk/index.ts";
-import { MARK_KINDS, MarkStore } from "../stores/marks.ts";
+import { MarkStore } from "../stores/marks.ts";
 import { Stores, type OtherStore } from "../stores/store.ts";
 import { readTodoChange, TodoStore } from "../stores/todos.ts";
 import app from "../web/index.html";
@@ -30,15 +34,26 @@ export function serve(options: {
   hosts?: readonly string[];
   open?: (path: string) => void;
   others?: readonly OtherStore[];
+  /** A central hub this machine sends its state to, when it is linked to one. */
+  central?: Link | null;
 }): Running {
   const own = new DiskStore(options.home, options.sources);
   const stores = new Stores(own, options.others);
   // What the user keeps apart from any work. Like a work's journal, these are the hub's own files in the home.
-  const marks = new MarkStore(join(options.home, ".marks.json"));
+  // A mark on an item an agent has since reworded is given on the item's id now. Another machine's works are not followed.
+  const marks = new MarkStore(join(options.home, ".marks.json"), () => own.formerIds());
   const todos = new TodoStore(join(options.home, ".todos.json"));
   /** Goes up with each change the user makes. */
   let userChanges = 0;
-  const state = (): HubState => ({ ...stores.state(), marks: marks.get(), todos: todos.get() });
+  // A mark changed on the central hub comes back as an order, applied here as a click on this hub is. One that is
+  // not about this machine's own work is left out, whatever hub sent it.
+  const apply = (order: MarkOrder) => {
+    if (!ownsMark(order.kind, order.key, new Set((own.state()?.works ?? []).map((work) => work.id as string)))) return;
+    if (marks.change(order.kind, [order.key], order.on)) userChanges++;
+  };
+  const sender = options.central ? new Sender({ link: options.central, own, extras: () => ({ marks: marks.get(), todos: todos.get() }), apply, changes: () => `${own.version}/${userChanges}` }) : null;
+  const machine = machineLabel();
+  const state = (): HubState => ({ ...stores.state(), machine: { label: machine, central: sender?.status() ?? null }, marks: marks.get(), todos: todos.get() });
   const names = new Set(["127.0.0.1", "localhost", ...(options.hosts ?? [])].map((name) => name.toLowerCase()));
   const local = <R extends Request>(handler: (req: R, srv: Bun.Server<undefined>) => Response | Promise<Response>) => (req: R, srv: Bun.Server<undefined>) => {
     const host = (req.headers.get("host") ?? "").toLowerCase();
@@ -46,10 +61,12 @@ export function serve(options: {
     const ours = host.endsWith(suffix) && names.has(host.slice(0, -suffix.length));
     return ours ? handler(req, srv) : new Response("Forbidden", { status: 403 });
   };
+  const reads = local(async (req) => (await read(req, { stores, state })) ?? new Response("Not found", { status: 404 }));
   stores.refresh();
 
   const clients = new Set<ReadableStreamDefaultController<string>>();
-  const version = () => `${stores.version}/${userChanges}`;
+  // A page also hears when the sends to the central hub stop going through, or start again.
+  const version = () => `${stores.version}/${userChanges}/${JSON.stringify(sender?.status().health)}`;
   let sent = version();
   const send = (message: string) => {
     for (const client of clients) {
@@ -69,6 +86,7 @@ export function serve(options: {
     try {
       stores.refresh();
       push();
+      sender?.tick();
     } catch (error) {
       console.error(`progress: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -98,29 +116,26 @@ export function serve(options: {
       // The bundled page, as Bun built it. Registering it is also what serves its script and styles.
       "/app.html": app,
       "/": page,
+      "/board": page,
+      "/activity": page,
+      "/media": page,
+      // The tabs of earlier builds, which the page sends on to where each went.
       "/needs": page,
       "/todos": page,
       "/in-progress": page,
       "/next": page,
       "/shipped": page,
-      "/activity": page,
-      "/media": page,
       "/w/:work": page,
       "/w/:work/:tab": page,
-      // `own` is this machine's store alone, which is what another hub asks for, so two hubs that read each other never loop.
-      "/api/state": local((req) => Response.json(new URL(req.url).searchParams.has("own") ? stores.own.state() : state())),
-      "/api/media": local(async (req) => Response.json(await (new URL(req.url).searchParams.has("own") ? stores.own.media() : stores.media()))),
-      // A file a work shows. An address with the file's time on it names one version, which the browser may keep.
-      "/files/*": local((req) => {
-        const url = new URL(req.url);
-        return stores.file(url.pathname.slice("/files/".length), url.searchParams.has("v"));
-      }),
+      "/api/state": reads,
+      "/api/media": reads,
+      "/files/*": reads,
       // The hub's two writes, marks and todos. Only its own page may make them: another site's form can post here, but not with this origin.
       "/api/marks": {
         POST: local(async (req) => {
           if (!fromOwnPage(req)) return new Response("Forbidden", { status: 403 });
           const change = readMarkChange(await req.json().catch(() => null));
-          if (!change) return new Response("Bad request", { status: 400 });
+          if (typeof change === "string") return new Response(change, { status: 400 });
           if (marks.change(change.kind, change.keys, change.on)) userChanges++;
           push();
           return new Response(null, { status: 204 });
@@ -149,10 +164,7 @@ export function serve(options: {
           return new Response(null, { status: 204 });
         }),
       },
-      "/api/work/:work": local(async (req) => {
-        const detail = await stores.detail(req.params.work as WorkId);
-        return detail ? Response.json(detail) : Response.json({ error: `No work called ${req.params.work}.` }, { status: 404 });
-      }),
+      "/api/work/:work": reads,
       "/api/events": local((req, srv) => {
         srv.timeout(req, 0);
         let self: ReadableStreamDefaultController<string> | null = null;
@@ -185,20 +197,6 @@ export function serve(options: {
   };
 }
 
-/** A request the hub's own page made: its origin is the address the request came to. */
-function fromOwnPage(req: Request): boolean {
-  const origin = req.headers.get("origin");
-  return origin !== null && URL.canParse(origin) && new URL(origin).host.toLowerCase() === (req.headers.get("host") ?? "").toLowerCase();
-}
-
 function openInBrowser(path: string): void {
   Bun.spawn([process.platform === "darwin" ? "open" : "xdg-open", path], { stdout: "ignore", stderr: "ignore" });
-}
-
-/** `{ kind, keys, on }` as the page sends it, or null when it is anything else. */
-function readMarkChange(body: unknown): { kind: MarkKind; keys: readonly string[]; on: boolean } | null {
-  if (typeof body !== "object" || body === null) return null;
-  const { kind, keys, on } = body as Record<string, unknown>;
-  const known = MARK_KINDS.find((name) => name === kind);
-  return known && Array.isArray(keys) && keys.every((key) => typeof key === "string") && typeof on === "boolean" ? { kind: known, keys, on } : null;
 }

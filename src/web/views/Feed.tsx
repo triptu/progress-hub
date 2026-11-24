@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { ArrowCounterClockwiseIcon, CaretRightIcon, ChecksIcon, CircleIcon, GitPullRequestIcon, HandPalmIcon, ListChecksIcon, PulseIcon, RocketLaunchIcon, SignpostIcon, StarIcon } from "@phosphor-icons/react";
+import { CaretRightIcon, GitPullRequestIcon, HandPalmIcon, ListChecksIcon, PencilSimpleIcon, PulseIcon, RocketLaunchIcon, SignpostIcon, StarIcon } from "@phosphor-icons/react";
 import type { Icon } from "@phosphor-icons/react";
 import type { FeedDay, FeedLine, FeedRow, Tone } from "../lib/feed.ts";
 import { filterDays, TONE_LABEL } from "../lib/feed.ts";
-import { toView, viewedOf } from "../lib/marks.ts";
+import { viewedOf } from "../lib/marks.ts";
 import type { MarkSet } from "../lib/marks.ts";
 import { firstImage } from "../lib/html.ts";
 import { routeHref } from "../lib/route.ts";
@@ -18,8 +18,6 @@ import s from "./Feed.module.css";
 
 interface FeedProps {
   readonly days: readonly FeedDay[];
-  /** The one tone this screen holds. The Shipped screen is where what landed is worked through. */
-  readonly only?: Tone;
   /** Every post is from the open work, so none says which work it is from. */
   readonly scoped: boolean;
   readonly empty: string;
@@ -27,7 +25,7 @@ interface FeedProps {
   readonly tab: Tab;
   /** The feed holds something the Important switch would keep, whatever the filter shows now. */
   readonly hasImportant: boolean;
-  /** What the user marked as viewed. Each line that shipped has a mark to click. */
+  /** What the user marked as viewed. A line that shipped shows its mark. */
   readonly viewed: MarkSet;
   /** What opens the feed's column, above its filters: a work's goal. */
   readonly lead?: ReactNode;
@@ -50,33 +48,19 @@ interface FeedProps {
 export function Feed(props: FeedProps) {
   const { viewed } = props;
   const [starred, setStarred] = useState(false);
-  const [unviewed, setUnviewed] = useState(false);
   const [types, setTypes] = useState<ReadonlySet<Kind>>(new Set());
-  const [marked, setMarked] = useState<readonly string[] | null>(null);
-  // The Shipped screen is where the user works through what landed. Activity only shows the marks.
-  const tracks = props.only === "shipped" && props.days.length > 0;
   // Activity holds every kind of change, so it can be narrowed to some kinds. A kind is offered only while the feed has it.
-  const kinds = useMemo(() => (props.only ? [] : KINDS.filter(({ kind }) => props.days.some((day) => day.rows.some(({ line }) => kindOf(line) === kind)))), [props.days, props.only]);
+  const kinds = useMemo(() => KINDS.filter(({ kind }) => props.days.some((day) => day.rows.some(({ line }) => kindOf(line) === kind))), [props.days]);
   const chosen = kinds.filter(({ kind }) => types.has(kind)).map(({ kind }) => kind);
-  // The filters narrow together. Each holds only where its button shows, so one set on Shipped never hides lines on Activity unseen.
   const importantOnly = starred && props.hasImportant;
-  const unviewedOnly = unviewed && tracks;
-  const narrowed = importantOnly || unviewedOnly || chosen.length > 0;
+  const narrowed = importantOnly || chosen.length > 0;
   const days = useMemo(
-    () => (narrowed ? filterDays(props.days, (line) => (!importantOnly || line.weight === "high") && (!unviewedOnly || toView(viewed, line.key)) && (chosen.length === 0 || chosen.includes(kindOf(line)))) : props.days),
-    [props.days, narrowed, importantOnly, unviewedOnly, chosen.join(), viewed],
+    () => (narrowed ? filterDays(props.days, (line) => (!importantOnly || line.weight === "high") && (chosen.length === 0 || chosen.includes(kindOf(line)))) : props.days),
+    [props.days, narrowed, importantOnly, chosen.join()],
   );
-  // What is on screen and not yet viewed: the button counts these lines and marks their keys.
-  const left = tracks ? days.flatMap((day) => day.rows.filter(({ line }) => toView(viewed, line.key))) : [];
-  // Undo is for the batch just marked. Once something else waits, the offer is gone for good.
-  const waiting = left.length > 0;
-  useEffect(() => {
-    if (waiting) setMarked(null);
-  }, [waiting]);
-  const undo = waiting ? null : marked;
   const toggle = (kind: Kind) => setTypes(new Set(types.has(kind) ? [...types].filter((k) => k !== kind) : [...types, kind]));
   const tools =
-    kinds.length > 1 || props.hasImportant || tracks || undo ? (
+    kinds.length > 1 || props.hasImportant ? (
       <>
         {kinds.length > 1
           ? kinds.map(({ kind, Icon, label }) => (
@@ -85,43 +69,9 @@ export function Feed(props: FeedProps) {
               </button>
             ))
           : null}
-        {tracks ? (
-          <button type="button" className="icon-btn tool" aria-pressed={unviewedOnly} aria-label="Only what is not viewed" title={unviewedOnly ? "Showing only what you have not viewed. Click to show everything." : "Show only what you have not viewed"} onClick={() => setUnviewed(!unviewed)}>
-            <CircleIcon weight={unviewedOnly ? "bold" : "regular"} aria-hidden />
-          </button>
-        ) : null}
         {props.hasImportant ? (
           <button type="button" className={`icon-btn tool ${s.starTool}`} aria-pressed={importantOnly} aria-label="Only what is marked important" title={importantOnly ? "Showing only what pages marked important. Click to show everything." : "Show only what pages marked important"} onClick={() => setStarred(!starred)}>
             <StarIcon weight={importantOnly ? "fill" : "regular"} aria-hidden />
-          </button>
-        ) : null}
-        {waiting ? (
-          <button
-            type="button"
-            className="btn"
-            title={`Mark ${plural(left.length, "line")} here as viewed`}
-            onClick={() => {
-              const keys = left.flatMap(({ line }) => line.key ?? []);
-              void viewed.add(keys);
-              setMarked(keys);
-            }}
-          >
-            <ChecksIcon aria-hidden />
-            Mark all
-            <span className="n">{left.length}</span>
-          </button>
-        ) : undo ? (
-          <button
-            type="button"
-            className="btn"
-            title="Marked as viewed. Click to take that back."
-            onClick={() => {
-              void viewed.remove(undo);
-              setMarked(null);
-            }}
-          >
-            <ArrowCounterClockwiseIcon aria-hidden />
-            Undo
           </button>
         ) : null}
       </>
@@ -138,7 +88,7 @@ export function Feed(props: FeedProps) {
           {days.map((day) => (
             <Day key={day.key} day={day} scoped={props.scoped} tab={props.tab} viewed={viewed} now={props.now} />
           ))}
-          {days.length ? null : <p className="nothing">{props.days.length === 0 ? props.empty : chosen.length > 0 ? "Nothing of the kinds you picked is here." : unviewedOnly && importantOnly ? "Nothing marked important is left to view." : unviewedOnly ? "You have viewed everything here." : "Nothing here is marked important."}</p>}
+          {days.length ? null : <p className="nothing">{props.days.length === 0 ? props.empty : chosen.length > 0 ? "Nothing of the kinds you picked is here." : "Nothing here is marked important."}</p>}
         </div>
         {days.length > 1 || props.aside ? (
           <div className="side-rail">
@@ -152,7 +102,7 @@ export function Feed(props: FeedProps) {
 }
 
 /** The kinds of change Activity can be narrowed to, each with the icon its button shows. */
-type Kind = "shipped" | "needs" | "decided" | "plan" | "prs" | "status";
+type Kind = "shipped" | "needs" | "decided" | "plan" | "prs" | "status" | "edits";
 
 const KINDS: readonly { readonly kind: Kind; readonly Icon: Icon; readonly label: string }[] = [
   { kind: "shipped", Icon: RocketLaunchIcon, label: "What shipped" },
@@ -161,12 +111,14 @@ const KINDS: readonly { readonly kind: Kind; readonly Icon: Icon; readonly label
   { kind: "plan", Icon: ListChecksIcon, label: "What is in progress or next" },
   { kind: "prs", Icon: GitPullRequestIcon, label: "Pull requests opened or closed" },
   { kind: "status", Icon: PulseIcon, label: "Status updates" },
+  { kind: "edits", Icon: PencilSimpleIcon, label: "Edits to a page" },
 ];
 
 function kindOf(line: FeedLine): Kind {
   if (line.kind === "pr") return line.change === "merged" ? "shipped" : "prs";
   switch (line.tone) {
     case "shipped":
+    case "live":
       return "shipped";
     case "needs":
     case "asked":
@@ -177,6 +129,10 @@ function kindOf(line: FeedLine): Kind {
     case "doing":
     case "next":
       return "plan";
+    case "edited":
+    case "written":
+    case "dropped":
+      return "edits";
     default:
       return "status";
   }
@@ -230,9 +186,10 @@ function Day(props: { readonly day: FeedDay; readonly scoped: boolean; readonly 
   );
 }
 
-function Timeline(props: { readonly rows: readonly FeedRow[]; readonly scoped: boolean; readonly tab: Tab; readonly viewed: MarkSet; readonly first?: number; readonly now: number }) {
+/** Lines of the feed as a timeline, on any screen that tells what happened. */
+export function Timeline(props: { readonly rows: readonly FeedRow[]; readonly scoped: boolean; readonly tab: Tab; readonly viewed?: MarkSet | undefined; readonly first?: number; readonly noun?: string; readonly now: number }) {
   return (
-    <Fold show={props.first ?? props.rows.length} noun="smaller updates" className="timeline">
+    <Fold show={props.first ?? props.rows.length} noun={props.noun ?? "smaller updates"} className="timeline">
       {props.rows.map((row, index) => (
         <Line
           key={row.at + index}
@@ -250,14 +207,15 @@ function Timeline(props: { readonly rows: readonly FeedRow[]; readonly scoped: b
 
 const PR_VERB = { opened: "Opened", closed: "Closed" } as const;
 
-function Line(props: { readonly row: FeedRow; readonly from: EntryProps["from"]; readonly sameTime: boolean; readonly viewed: MarkSet; readonly now: number }) {
+function Line(props: { readonly row: FeedRow; readonly from: EntryProps["from"]; readonly sameTime: boolean; readonly viewed: MarkSet | undefined; readonly now: number }) {
+  const viewed = props.viewed ? viewedOf(props.viewed, props.row.line.key) : undefined;
   const { line, at } = props.row;
   const shared = { from: props.from, at, sameTime: props.sameTime, now: props.now };
   const image = useMemo(() => (line.kind === "text" && line.html ? firstImage(line.html) : null), [line]);
   if (line.kind === "pr") {
     // A merge no line names is something that shipped, drawn as one: the pull request's title stands in for the line, as on the work's page.
     if (line.change === "merged") {
-      return <Entry kind="shipped" weight={line.weight} text={line.pr.title} prs={[line.pr]} viewed={viewedOf(props.viewed, line.key)} {...shared} />;
+      return <Entry kind="shipped" weight={line.weight} text={line.pr.title} prs={[line.pr]} viewed={viewed} {...shared} />;
     }
     // The dot says what happened then, not what the pull request has become since. Its chip says that and opens it.
     return <Entry kind={line.change} weight={line.weight} label={PR_VERB[line.change]} text={line.pr.title} prs={[line.pr]} {...shared} />;
@@ -273,10 +231,15 @@ function Line(props: { readonly row: FeedRow; readonly from: EntryProps["from"];
       prs={line.prs}
       commits={line.commits}
       important={line.weight === "high" && line.tone !== "needs"}
-      viewed={viewedOf(props.viewed, line.key)}
+      viewed={viewed}
       {...shared}
     >
-      {image ? <img className="shot" src={image.src} style={(image.size ?? undefined) as CSSProperties | undefined} alt="" loading="lazy" /> : null}
+      {image ? (
+        // The line's picture, small. It opens large like any picture of a page; one from elsewhere opens where it lives.
+        <a className="fig" aria-label={`Open the picture for: ${line.text}`} href={image.src.replace(/\?v=\d+$/, "")} {...(image.src.startsWith("/files/") ? {} : { target: "_blank", rel: "noopener noreferrer" })}>
+          <img className="shot" src={image.src} style={(image.size ?? undefined) as CSSProperties | undefined} alt="" loading="lazy" />
+        </a>
+      ) : null}
     </Entry>
   );
 }

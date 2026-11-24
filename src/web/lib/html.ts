@@ -38,6 +38,27 @@ export function sanitize(html: Html): string {
   return DOMPurify.sanitize(html, CONFIG);
 }
 
+/**
+ * A line of server HTML without its links, their words kept, for a line that is itself one link.
+ * A link written as its bare address reads as the site and the last part of the path, since an address
+ * can't be followed from here and would fill the line.
+ */
+export function withoutLinks(html: string): string {
+  return html
+    .replace(/<a\b[^>]*>\s*(https?:\/\/[^<\s]+)\s*<\/a>/gi, (whole, address: string) => {
+      if (!URL.canParse(address)) return whole;
+      const { host, pathname } = new URL(address);
+      const last = pathname.split("/").filter(Boolean).at(-1);
+      return last ? `${host}/…/${last}` : host;
+    })
+    .replace(/<\/?a\b[^>]*>/gi, "");
+}
+
+/** The words of a piece of server HTML, for a short preview. */
+export function wordsOf(html: Html): string {
+  return (new DOMParser().parseFromString(sanitize(html), "text/html").body.textContent ?? "").replace(/\s+/g, " ").trim();
+}
+
 /** The first image in a piece of server HTML, for a thumbnail in the feed, with the pixel size the hub read for it. */
 export function firstImage(html: Html): { readonly src: string; readonly size: { readonly "--w": string; readonly "--h": string } | null } | null {
   const img = new DOMParser().parseFromString(sanitize(html), "text/html").querySelector("img");

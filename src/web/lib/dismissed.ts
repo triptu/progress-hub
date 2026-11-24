@@ -23,7 +23,13 @@ export function useDismissed() {
       if (saved) localStorage.removeItem(OLD_KEY);
     });
   }, []);
-  return useMemo(() => ({ has: marks.has, dismiss: (keys: readonly string[]) => void marks.add(keys), restore: (keys: readonly string[]) => void marks.remove(keys) }), [marks]);
+  return useMemo(
+    () => ({
+      has: marks.has,
+      change: { dismiss: (keys: readonly string[]) => void marks.add(keys), restore: (keys: readonly string[]) => void marks.remove(keys) },
+    }),
+    [marks],
+  );
 }
 
 export type Dismissed = ReturnType<typeof useDismissed>;

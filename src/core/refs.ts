@@ -24,5 +24,11 @@ export function shortRefs(text: string): string {
   return text.replace(LINK, (...match: (string | undefined)[]) => refLabel(toRef(match)));
 }
 
+/**
+ * A line often opens with the pull request or commit it is about: "#16565 Every dependency version…".
+ * This finds that reference where the words after it stand on their own: "#26 is open" needs its subject.
+ */
+export const LEADING_REF = /^(#\d+|[0-9a-f]{7})[\s:,.]+(?=\p{Lu})/u;
+
 /** GitHub links in HTML text that no anchor holds yet, such as one the Markdown renderer left bare because a colon follows it. */
 export const BARE_GITHUB_LINK = new RegExp(`(?<![="'>/\\w])${LINK.source}`, "gi");
