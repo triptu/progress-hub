@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>progress-hub: see what your agents are doing, and what they shipped</title>
+<meta name="description" content="Each coding agent keeps one Markdown page for its task. A hub on your machine puts them all on one board: what shipped, what is in progress, what is next up and what needs you." />
+<meta property="og:title" content="progress-hub" />
+<meta property="og:description" content="See what your agents are doing, and what they shipped. One board for every task your coding agents work on." />
+<meta property="og:image" content="https://progress-hub.tushar.ai/share-v1.jpg" />
+<meta property="og:url" content="https://progress-hub.tushar.ai/" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="theme-color" content="#0b0b0c" media="(prefers-color-scheme: dark)" />
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23171717'/%3E%3Crect x='7' y='8' width='18' height='4' rx='1' fill='%23ff8904'/%3E%3Crect x='7' y='14' width='12' height='4' rx='1' fill='%2351a2ff'/%3E%3Crect x='7' y='20' width='6' height='4' rx='1' fill='%2300d492'/%3E%3C/svg%3E" />
+<link rel="preload" href="fonts/inter.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="preload" href="fonts/jetbrains-mono.woff2" as="font" type="font/woff2" crossorigin />
+<script>try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(_){}</script>
+<style>
+  @font-face { font-family: "Inter"; src: url(fonts/inter.woff2) format("woff2"); font-weight: 100 900; font-display: swap; }
+  @font-face { font-family: "JetBrains Mono"; src: url(fonts/jetbrains-mono.woff2) format("woff2"); font-weight: 100 800; font-display: swap; }
+
+  /* Every design value is here. Greys are neutral; the three status colours are the hub's own. */
+  :root {
+    --bg: oklch(99.4% 0 0);
+    --surface: oklch(97.2% 0 0);
+    --text: oklch(20.5% 0 0);
+    --muted: oklch(48% 0 0);
+    --faint: oklch(70.8% 0 0);
+    --line: oklch(92.2% 0 0);
+    --shot-edge: oklch(0% 0 0 / 0.09);
+    --shot-shadow: 0 30px 70px -30px oklch(0% 0 0 / 0.28), 0 10px 24px -14px oklch(0% 0 0 / 0.16);
+    --needs: oklch(64.6% 0.19 47);
+    --new: oklch(62.3% 0.17 255);
+    --shipped: oklch(59.6% 0.13 163);
+    --btn-bg: oklch(20.5% 0 0);
+    --btn-text: oklch(98.5% 0 0);
+    --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --wrap: 1180px;
+    --gutter: 32px;
+    --radius: 12px;
+    --fast: 150ms;
+    --slow: 700ms;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: oklch(14.5% 0 0); --surface: oklch(18.5% 0 0); --text: oklch(96% 0 0); --muted: oklch(70.8% 0 0); --faint: oklch(48% 0 0);
+      --line: oklch(24% 0 0); --shot-edge: oklch(100% 0 0 / 0.08); --shot-shadow: 0 40px 90px -30px oklch(0% 0 0 / 0.9);
+      --needs: oklch(78% 0.125 58); --new: oklch(77% 0.085 245); --shipped: oklch(78% 0.11 158);
+      --btn-bg: oklch(96% 0 0); --btn-text: oklch(14.5% 0 0);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: oklch(14.5% 0 0); --surface: oklch(18.5% 0 0); --text: oklch(96% 0 0); --muted: oklch(70.8% 0 0); --faint: oklch(48% 0 0);
+    --line: oklch(24% 0 0); --shot-edge: oklch(100% 0 0 / 0.08); --shot-shadow: 0 40px 90px -30px oklch(0% 0 0 / 0.9);
+    --needs: oklch(78% 0.125 58); --new: oklch(77% 0.085 245); --shipped: oklch(78% 0.11 158);
+    --btn-bg: oklch(96% 0 0); --btn-text: oklch(14.5% 0 0);
+    color-scheme: dark;
+  }
+
+  /* One picture per theme: the light one unless the page is dark. */
+  .dk, .frame .dk { display: none; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .dk { display: block; } :root:not([data-theme="light"]) .lt { display: none; } }
+  :root[data-theme="dark"] .dk { display: block; }
+  :root[data-theme="dark"] .lt { display: none; }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 400 17px/1.6 var(--sans); -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01"; }
+  a { color: inherit; }
+  svg.i { width: 18px; height: 18px; flex: none; fill: currentColor; }
+  .wrap { max-width: var(--wrap); margin: 0 auto; padding: 0 var(--gutter); }
+
+  /* header */
+  .top { display: flex; align-items: center; justify-content: space-between; height: 72px; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; font: 600 16px/1 var(--mono); text-decoration: none; letter-spacing: -0.01em; }
+  .mark { width: 14px; height: 14px; background: linear-gradient(var(--needs) 0 0) 0 0 / 100% 2.5px, linear-gradient(var(--new) 0 0) 0 5.75px / 66% 2.5px, linear-gradient(var(--shipped) 0 0) 0 11.5px / 33% 2.5px; background-repeat: no-repeat; }
+  .top nav { display: flex; align-items: center; gap: 8px; }
+  .navlink { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 8px; color: var(--muted); text-decoration: none; font-size: 15px; font-weight: 500; transition: color var(--fast), background-color var(--fast); }
+  .navlink:hover { color: var(--text); background: var(--surface); }
+  .theme { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--surface); }
+  .theme button { display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 7px; background: none; color: var(--muted); cursor: default; transition: color var(--fast), background-color var(--fast); }
+  .theme button:hover { color: var(--text); }
+  .theme button[aria-pressed="true"] { background: var(--bg); color: var(--text); box-shadow: 0 0 0 1px var(--line); }
+  .theme svg.i { width: 16px; height: 16px; }
+
+  /* hero */
+  .hero { padding: 88px 0 56px; text-align: center; }
+  .lanes { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 6px 18px; margin: 0 0 28px; padding: 0; list-style: none; font-size: 14px; font-weight: 500; color: var(--muted); }
+  .lanes li { display: inline-flex; align-items: center; gap: 7px; }
+  .lanes svg.i { width: 16px; height: 16px; }
+  .lanes .needs svg { color: var(--needs); } .lanes .next svg { color: var(--muted); } .lanes .doing svg { color: var(--new); } .lanes .shipped svg { color: var(--shipped); }
+  .lanes .shipped { color: var(--text); }
+  h1 { margin: 0 auto; max-width: 24ch; font-size: clamp(40px, 6.2vw, 72px); line-height: 1.02; font-weight: 650; letter-spacing: -0.04em; text-wrap: balance; }
+  .lede { max-width: 34em; margin: 24px auto 0; font-size: 19px; line-height: 1.55; color: var(--muted); text-wrap: pretty; }
+  .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 34px; }
+  .btn { display: inline-flex; align-items: center; gap: 9px; height: 46px; padding: 0 20px; border-radius: 10px; font-size: 16px; font-weight: 550; text-decoration: none; background: var(--surface); color: var(--text); box-shadow: inset 0 0 0 1px var(--line); transition: background-color var(--fast), box-shadow var(--fast); }
+  .btn:hover { box-shadow: inset 0 0 0 1px var(--faint); }
+  .btn.primary { background: var(--btn-bg); color: var(--btn-text); box-shadow: none; }
+  .btn.primary:hover { background: color-mix(in oklab, var(--btn-bg) 86%, var(--bg)); }
+  .btn:active, .navlink:active, .copy:active, .theme button:active { scale: 0.97; }
+
+  .fine { margin: 18px 0 0; font-size: 14px; color: var(--muted); }
+  .film { margin: 56px auto 0; }
+  .frame { position: relative; overflow: hidden; border-radius: var(--radius); background: var(--surface); box-shadow: 0 0 0 1px var(--shot-edge), var(--shot-shadow); }
+  .frame img, .frame video { display: block; width: 100%; height: auto; }
+  .film video { aspect-ratio: 16 / 9; object-fit: cover; background: #000; }
+  .play { position: absolute; inset: 0; display: block; width: 100%; padding: 0; border: 0; background: none; font: inherit; cursor: default; }
+  .play img { width: 100%; height: 100%; object-fit: cover; }
+  .play-pill { position: absolute; left: 50%; top: 50%; translate: -50% -20%; display: inline-flex; align-items: center; gap: 12px; padding: 10px 20px 10px 10px; border-radius: 999px; background: color-mix(in oklab, var(--bg) 90%, transparent); color: var(--text); font-size: 16px; font-weight: 600; box-shadow: 0 0 0 1px var(--line), 0 20px 50px -10px oklch(0% 0 0 / 0.45); backdrop-filter: blur(10px); transition: scale var(--fast); }
+  .play-dot { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--text); color: var(--bg); }
+  .play-dot svg.i { width: 16px; height: 16px; translate: 1px 0; }
+  .play:hover .play-pill { scale: 1.03; }
+  .play:active .play-pill { scale: 0.98; }
+  .film[data-playing] .play { display: none; }
+  .play-pill { white-space: nowrap; }
+  @media (max-width: 860px) { .play-pill { gap: 9px; padding: 6px 14px 6px 6px; font-size: 14px; } .play-dot { width: 30px; height: 30px; } .play-dot svg.i { width: 13px; height: 13px; } }
+
+  /* points */
+  .points { padding: 128px 0 40px; display: grid; gap: 136px; }
+  .point header { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 24px 56px; align-items: start; margin-bottom: 40px; }
+  .tag { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 14px; font-size: 14px; font-weight: 550; color: var(--muted); }
+  .tag svg.i { width: 16px; height: 16px; }
+  h2 { margin: 0; font-size: clamp(30px, 3.4vw, 42px); line-height: 1.1; font-weight: 650; letter-spacing: -0.03em; text-wrap: balance; }
+  .point header > p { margin: 0; padding-top: 36px; font-size: 18px; color: var(--muted); text-wrap: pretty; }
+  .zoom { cursor: zoom-in; }
+  .point figcaption { margin-top: 16px; font-size: 14px; color: var(--faint); text-align: center; }
+  .pair { display: grid; grid-template-columns: 3fr 2fr; gap: 24px; align-items: start; }
+  .phones { display: grid; grid-template-columns: repeat(3, minmax(0, 300px)); justify-content: center; gap: 32px; }
+  .phones .frame { border-radius: 28px; }
+  .phones .frame img { -webkit-mask-image: linear-gradient(#000 88%, transparent); mask-image: linear-gradient(#000 88%, transparent); }
+
+  /* quick start */
+  .start { margin: 120px 0 0; padding: 72px 0 0; }
+  .start h2 { text-align: center; }
+  .start > p { max-width: 34em; margin: 16px auto 0; text-align: center; color: var(--muted); }
+  .prompt { position: relative; max-width: 920px; margin: 36px auto 0; padding: 22px 64px 22px 24px; border-radius: var(--radius); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); font: 450 15px/1.65 var(--mono); overflow-wrap: break-word; }
+  .copy { position: absolute; top: 14px; right: 14px; display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: default; transition: color var(--fast), background-color var(--fast); }
+  .copy:hover { color: var(--text); background: var(--bg); }
+  .copy .done { display: none; color: var(--shipped); }
+  .copy[data-copied] .idle { display: none; }
+  .copy[data-copied] .done { display: block; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .after { max-width: 920px; margin: 18px auto 0; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; font-size: 15px; color: var(--muted); }
+  .after a { text-underline-offset: 3px; text-decoration-color: var(--faint); }
+  .after a:hover { text-decoration-color: currentColor; }
+
+  footer { margin-top: 140px; padding: 36px 0 48px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 24px; font-size: 14px; color: var(--muted); box-shadow: 0 -1px 0 var(--line); }
+  footer a { text-decoration: none; }
+  footer a:hover { color: var(--text); }
+  footer nav { display: flex; gap: 22px; }
+
+  /* The picture viewer: a picture large, with the one before and after. */
+  .viewer { width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: transparent; color: #fff; }
+  .viewer::backdrop { background: oklch(10% 0 0 / 0.96); }
+  .viewer:focus { outline: none; }
+  .viewer[open] { display: grid; place-items: center; }
+  .viewer figure { margin: 0; display: grid; justify-items: center; gap: 14px; padding: 56px 72px 24px; }
+  .viewer img { display: block; max-width: calc(100vw - 144px); max-height: calc(100dvh - 120px); width: auto; height: auto; border-radius: 10px; }
+  .viewer figcaption { max-width: 60ch; font-size: 14px; color: oklch(80% 0 0); text-align: center; }
+  .viewer button { position: fixed; display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 50%; background: oklch(100% 0 0 / 0.1); color: #fff; cursor: default; transition: background-color var(--fast); }
+  .viewer button:hover { background: oklch(100% 0 0 / 0.2); }
+  .viewer .close { top: 16px; right: 16px; }
+  .viewer .prev { left: 16px; top: 50%; translate: 0 -50%; }
+  .viewer .next { right: 16px; top: 50%; translate: 0 -50%; }
+  @media (max-width: 860px) { .viewer figure { padding: 64px 8px 72px; } .viewer img { max-width: calc(100vw - 16px); max-height: calc(100dvh - 160px); } .viewer .prev, .viewer .next { top: auto; bottom: 16px; translate: none; } }
+
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+  @media (max-width: 860px) {
+    :root { --gutter: 16px; }
+    body { font-size: 16px; }
+    .top { height: 60px; }
+    .navlink span { display: none; }
+    .hero { padding: 48px 0 32px; }
+    .lede { font-size: 17px; }
+    h1 { max-width: 15ch; }
+    h1 .wide { display: none; }
+    .lanes { gap: 6px 12px; font-size: 13px; }
+    .lanes svg.i { width: 14px; height: 14px; }
+    .film { margin-top: 40px; }
+    .points { padding-top: 88px; gap: 88px; }
+    .point header { grid-template-columns: 1fr; margin-bottom: 24px; }
+    .point header > p { padding-top: 0; font-size: 16.5px; }
+    .pair { grid-template-columns: 1fr; }
+    /* One phone at a time, swiped. */
+    .phones { display: flex; gap: 14px; margin: 0 calc(-1 * var(--gutter)); padding: 4px var(--gutter) 24px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+    .phones::-webkit-scrollbar { display: none; }
+    .phones .frame { flex: 0 0 72%; scroll-snap-align: center; border-radius: 22px; }
+    .frame { border-radius: 8px; }
+    .start { margin-top: 64px; padding-top: 40px; }
+    .prompt { padding: 18px 56px 18px 18px; font-size: 14px; }
+    footer { margin-top: 88px; }
+  }
+  @media (max-width: 380px) { .lanes { gap: 4px 8px; font-size: 12.5px; } .lanes li { gap: 5px; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-github" viewBox="0 0 256 256"><path d="M208.31,75.68A59.78,59.78,0,0,0,202.93,28,8,8,0,0,0,196,24a59.75,59.75,0,0,0-48,24H124A59.75,59.75,0,0,0,76,24a8,8,0,0,0-6.93,4,59.78,59.78,0,0,0-5.38,47.68A58.14,58.14,0,0,0,56,104v8a56.06,56.06,0,0,0,48.44,55.47A39.8,39.8,0,0,0,96,192v8H72a24,24,0,0,1-24-24A40,40,0,0,0,8,136a8,8,0,0,0,0,16,24,24,0,0,1,24,24,40,40,0,0,0,40,40H96v16a8,8,0,0,0,16,0V192a24,24,0,0,1,48,0v40a8,8,0,0,0,16,0V192a39.8,39.8,0,0,0-8.44-24.530A56.06,56.06,0,0,0,216,112v-8A58.14,58.14,0,0,0,208.31,75.68ZM200,112a40,40,0,0,1-40,40H112a40,40,0,0,1-40-40v-8a41.74,41.74,0,0,1,6.9-22.48A8,8,0,0,0,80,73.83a43.81,43.81,0,0,1,.79-33.58,43.88,43.88,0,0,1,32.32,20.06A8,8,0,0,0,119.82,64h32.35a8,8,0,0,0,6.74-3.69,43.87,43.87,0,0,1,32.32-20.06A43.81,43.81,0,0,1,192,73.83a8.09,8.09,0,0,0,1,7.65A41.72,41.72,0,0,1,200,104Z"/></symbol>
+  <symbol id="i-hand" viewBox="0 0 256 256"><path d="M188,88a27.75,27.75,0,0,0-12,2.71V60a28,28,0,0,0-41.36-24.6A28,28,0,0,0,80,44v6.71A27.75,27.75,0,0,0,68,48,28,28,0,0,0,40,76v76a88,88,0,0,0,176,0V116A28,28,0,0,0,188,88Zm12,64a72,72,0,0,1-144,0V76a12,12,0,0,1,24,0v44a8,8,0,0,0,16,0V44a12,12,0,0,1,24,0v68a8,8,0,0,0,16,0V60a12,12,0,0,1,24,0v68.67A48.08,48.08,0,0,0,120,176a8,8,0,0,0,16,0,32,32,0,0,1,32-32,8,8,0,0,0,8-8V116a12,12,0,0,1,24,0Z"/></symbol>
+  <symbol id="i-next" viewBox="0 0 256 256"><path d="M96.26,37.05A8,8,0,0,1,102,27.29a104.11,104.11,0,0,1,52,0,8,8,0,0,1-2,15.75,8.15,8.15,0,0,1-2-.26,88.09,88.09,0,0,0-44,0A8,8,0,0,1,96.26,37.05ZM53.79,55.14a104.05,104.05,0,0,0-26,45,8,8,0,0,0,15.42,4.27,88,88,0,0,1,22-38.09A8,8,0,0,0,53.79,55.14ZM43.21,151.55a8,8,0,1,0-15.42,4.28,104.12,104.12,0,0,0,26,45,8,8,0,0,0,11.41-11.22A88.14,88.14,0,0,1,43.21,151.55ZM150,213.22a88,88,0,0,1-44,0,8,8,0,1,0-4,15.49,104.11,104.11,0,0,0,52,0,8,8,0,0,0-4-15.49ZM222.65,146a8,8,0,0,0-9.85,5.58,87.91,87.91,0,0,1-22,38.08,8,8,0,1,0,11.42,11.21,104,104,0,0,0,26-45A8,8,0,0,0,222.65,146Zm-9.86-41.54a8,8,0,0,0,15.42-4.28,104,104,0,0,0-26-45,8,8,0,1,0-11.41,11.22A88,88,0,0,1,212.79,104.45Z"/></symbol>
+  <symbol id="i-doing" viewBox="0 0 256 256"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm8,16.37a86.4,86.4,0,0,1,16,3V212.67a86.4,86.4,0,0,1-16,3Zm32,9.26a87.81,87.81,0,0,1,16,10.54V195.83a87.81,87.81,0,0,1-16,10.54ZM40,128a88.11,88.11,0,0,1,80-87.63V215.63A88.11,88.11,0,0,1,40,128Zm160,50.54V77.46a87.82,87.82,0,0,1,0,101.08Z"/></symbol>
+  <symbol id="i-rocket" viewBox="0 0 256 256"><path d="M223.85,47.12a16,16,0,0,0-15-15c-12.58-.75-44.73.4-71.41,27.07L132.69,64H74.36A15.91,15.91,0,0,0,63,68.68L28.7,103a16,16,0,0,0,9.07,27.16l38.47,5.37,44.21,44.21,5.37,38.49a15.94,15.94,0,0,0,10.78,12.92,16.11,16.11,0,0,0,5.1.83A15.91,15.91,0,0,0,153,227.3L187.32,193A15.91,15.91,0,0,0,192,181.64V123.31l4.77-4.77C223.45,91.86,224.6,59.71,223.85,47.12ZM74.36,80h42.33L77.16,119.52,40,114.34Zm74.41-9.45a76.65,76.65,0,0,1,59.11-22.47,76.46,76.46,0,0,1-22.42,59.16L128,164.68,91.32,128ZM176,181.64,141.67,216l-5.18-37.17L176,139.31Zm-74.16,9.5C97.34,201,82.29,224,40,224a8,8,0,0,1-8-8c0-42.29,23-57.34,32.86-61.85a8,8,0,0,1,6.64,14.56c-6.43,2.93-20.62,12.36-23.12,38.91,26.55-2.5,36-16.69,38.91-23.12a8,8,0,1,1,14.56,6.64Z"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 256 256"><path d="M197.58,129.06,146,110l-19-51.62a15.92,15.92,0,0,0-29.88,0L78,110l-51.62,19a15.92,15.92,0,0,0,0,29.88L78,178l19,51.62a15.92,15.92,0,0,0,29.88,0L146,178l51.62-19a15.92,15.92,0,0,0,0-29.88ZM137,164.22a8,8,0,0,0-4.74,4.74L112,223.85,91.78,169A8,8,0,0,0,87,164.22L32.15,144,87,123.78A8,8,0,0,0,91.78,119L112,64.15,132.22,119a8,8,0,0,0,4.74,4.74L191.85,144ZM144,40a8,8,0,0,1,8-8h16V16a8,8,0,0,1,16,0V32h16a8,8,0,0,1,0,16H184V64a8,8,0,0,1-16,0V48H152A8,8,0,0,1,144,40ZM248,88a8,8,0,0,1-8,8h-8v8a8,8,0,0,1-16,0V96h-8a8,8,0,0,1,0-16h8V72a8,8,0,0,1,16,0v8h8A8,8,0,0,1,248,88Z"/></symbol>
+  <symbol id="i-kanban" viewBox="0 0 256 256"><path d="M216,48H40a8,8,0,0,0-8,8V208a16,16,0,0,0,16,16H88a16,16,0,0,0,16-16V160h48v16a16,16,0,0,0,16,16h40a16,16,0,0,0,16-16V56A8,8,0,0,0,216,48ZM88,208H48V128H88Zm0-96H48V64H88Zm64,32H104V64h48Zm56,32H168V128h40Zm0-64H168V64h40Z"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 256 256"><path d="M176,16H80A24,24,0,0,0,56,40V216a24,24,0,0,0,24,24h96a24,24,0,0,0,24-24V40A24,24,0,0,0,176,16ZM72,64H184V192H72Zm8-32h96a8,8,0,0,1,8,8v8H72V40A8,8,0,0,1,80,32Zm96,192H80a8,8,0,0,1-8-8v-8H184v8A8,8,0,0,1,176,224Z"/></symbol>
+  <symbol id="i-left" viewBox="0 0 256 256"><path d="M165.66,202.34a8,8,0,0,1-11.32,11.32l-80-80a8,8,0,0,1,0-11.32l80-80a8,8,0,0,1,11.32,11.32L91.31,128Z"/></symbol>
+  <symbol id="i-right" viewBox="0 0 256 256"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></symbol>
+  <symbol id="i-x" viewBox="0 0 256 256"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 256 256"><path d="M240,128a15.74,15.74,0,0,1-7.6,13.51L88.32,229.65a16,16,0,0,1-16.2.3A15.86,15.86,0,0,1,64,216.13V39.87a15.86,15.86,0,0,1,8.12-13.82,16,16,0,0,1,16.2.3L232.4,114.49A15.74,15.74,0,0,1,240,128Z"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 256 256"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 256 256"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 256 256"><path d="M208,40H48A24,24,0,0,0,24,64V176a24,24,0,0,0,24,24H208a24,24,0,0,0,24-24V64A24,24,0,0,0,208,40Zm8,136a8,8,0,0,1-8,8H48a8,8,0,0,1-8-8V64a8,8,0,0,1,8-8H208a8,8,0,0,1,8,8Zm-48,48a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h64A8,8,0,0,1,168,224Z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 256 256"><path d="M120,40V16a8,8,0,0,1,16,0V40a8,8,0,0,1-16,0Zm72,88a64,64,0,1,1-64-64A64.07,64.07,0,0,1,192,128Zm-16,0a48,48,0,1,0-48,48A48.05,48.05,0,0,0,176,128ZM58.34,69.66A8,8,0,0,0,69.66,58.34l-16-16A8,8,0,0,0,42.34,53.66Zm0,116.68-16,16a8,8,0,0,0,11.32,11.32l16-16a8,8,0,0,0-11.32-11.32ZM192,72a8,8,0,0,0,5.66-2.34l16-16a8,8,0,0,0-11.32-11.32l-16,16A8,8,0,0,0,192,72Zm5.66,114.34a8,8,0,0,0-11.32,11.32l16,16a8,8,0,0,0,11.32-11.32ZM48,128a8,8,0,0,0-8-8H16a8,8,0,0,0,0,16H40A8,8,0,0,0,48,128Zm80,80a8,8,0,0,0-8,8v24a8,8,0,0,0,16,0V216A8,8,0,0,0,128,208Zm112-88H216a8,8,0,0,0,0,16h24a8,8,0,0,0,0-16Z"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 256 256"><path d="M233.54,142.23a8,8,0,0,0-8-2,88.08,88.08,0,0,1-109.8-109.8,8,8,0,0,0-10-10,104.84,104.84,0,0,0-52.91,37A104,104,0,0,0,136,224a103.09,103.09,0,0,0,62.52-20.88,104.84,104.84,0,0,0,37-52.91A8,8,0,0,0,233.54,142.23ZM188.9,190.34A88,88,0,0,1,65.66,67.11a89,89,0,0,1,31.4-26A106,106,0,0,0,96,56,104.11,104.11,0,0,0,200,160a106,106,0,0,0,14.92-1.06A89,89,0,0,1,188.9,190.34Z"/></symbol>
+</svg>
+
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="/"><span class="mark" aria-hidden="true"></span>progress-hub</a>
+    <nav>
+      <a class="navlink" href="https://github.com/triptu/progress-hub" aria-label="GitHub"><svg class="i"><use href="#i-github"/></svg><span>GitHub</span></a>
+      <div class="theme" role="group" aria-label="Theme">
+        <button type="button" data-theme-pick="system" title="Follow the system" aria-label="Follow the system"><svg class="i"><use href="#i-monitor"/></svg></button>
+        <button type="button" data-theme-pick="light" title="Light" aria-label="Light"><svg class="i"><use href="#i-sun"/></svg></button>
+        <button type="button" data-theme-pick="dark" title="Dark" aria-label="Dark"><svg class="i"><use href="#i-moon"/></svg></button>
+      </div>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <ul class="lanes" aria-label="The board's columns">
+      <li class="needs"><svg class="i"><use href="#i-hand"/></svg>Needs you</li>
+      <li class="next"><svg class="i"><use href="#i-next"/></svg>Next up</li>
+      <li class="doing"><svg class="i"><use href="#i-doing"/></svg>In progress</li>
+      <li class="shipped"><svg class="i"><use href="#i-rocket"/></svg>Shipped</li>
+    </ul>
+    <h1>See what your agents are doing,<br class="wide" /> and what they shipped.</h1>
+    <p class="lede">Each coding agent keeps one Markdown page for its task. A hub on your machine puts them all on one board.</p>
+    <div class="actions">
+      <a class="btn primary" href="#start">Set it up</a>
+      <a class="btn" href="https://github.com/triptu/progress-hub"><svg class="i"><use href="#i-github"/></svg>GitHub</a>
+    </div>
+    <p class="fine">Open source. Runs on your machine. No account.</p>
+    <div class="film">
+      <div class="frame">
+        <video playsinline preload="none" aria-label="The progress-hub trailer, 24 seconds" id="trailer">
+          <source src="trailer-v1.mp4" type="video/mp4" />
+        </video>
+        <button class="play" type="button" aria-label="Play the trailer, 24 seconds">
+          <img class="lt" src="trailer-poster-light-v2.jpg" width="1920" height="1080" alt="" />
+          <img class="dk" src="trailer-poster-v2.jpg" width="1920" height="1080" alt="" />
+          <span class="play-pill"><span class="play-dot"><svg class="i"><use href="#i-play"/></svg></span>Watch the trailer · 0:24</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <main class="points">
+    <article class="point">
+      <header>
+        <div><p class="tag"><svg class="i"><use href="#i-kanban"/></svg>The board</p><h2>Everything your agents are doing, on one board.</h2></div>
+        <p>Every task's cards, side by side in four columns. A dot marks what is new since you last looked.</p>
+      </header>
+      <figure class="frame" style="margin:0">
+        <img class="lt" src="img/board-light-v1.webp" width="2880" height="1800" loading="lazy" alt="The board with sample data: four columns of cards from two tasks." />
+        <img class="dk" src="img/board-v1.webp" width="2880" height="1800" loading="lazy" alt="The board with sample data: four columns of cards from two tasks." />
+      </figure>
+    </article>
+
+    <article class="point">
+      <header>
+        <div><p class="tag" style="color:var(--shipped)"><svg class="i"><use href="#i-rocket"/></svg>Shipped</p><h2>Everything they shipped, with the screenshots.</h2></div>
+        <p>Give Shipped the board's whole width and skim it from top to bottom. Each row has what the agent wrote, its screenshots large, its pull requests and whether the change is live. Open a card to read it in full, and step to the next with the arrow keys.</p>
+      </header>
+      <figure class="frame" style="margin:0">
+        <picture class="lt"><source media="(max-width: 860px)" srcset="img/shipped-row-light-v1.webp" width="1360" height="620" /><img src="img/wide-light-v2.webp" width="2880" height="1800" loading="lazy" alt="The Shipped column across the board's whole width, each change one row with its pull request, whether it is live, and its screenshots." /></picture>
+        <picture class="dk"><source media="(max-width: 860px)" srcset="img/shipped-row-v1.webp" width="1360" height="620" /><img src="img/wide-v2.webp" width="2880" height="1800" loading="lazy" alt="The Shipped column across the board's whole width, each change one row with its pull request, whether it is live, and its screenshots." /></picture>
+      </figure>
+    </article>
+
+    <article class="point">
+      <header>
+        <div><p class="tag" style="color:var(--new)"><svg class="i"><use href="#i-sparkle"/></svg>A task's page</p><h2>A page that opens with what changed.</h2></div>
+        <p>A task's page starts with what is new since your last visit. Under that are its goal, the questions waiting for your answer, and the rest as the agent wrote it.</p>
+      </header>
+      <figure class="frame" style="margin:0">
+        <img class="lt" src="img/work-light-v2.webp" width="2880" height="1800" loading="lazy" alt="A task's page with sample data: its goal, two questions for you, where it stands and its decisions." />
+        <img class="dk" src="img/work-v2.webp" width="2880" height="1800" loading="lazy" alt="A task's page with sample data: its goal, two questions for you, where it stands and its decisions." />
+      </figure>
+    </article>
+
+    <article class="point">
+      <header>
+        <div><p class="tag"><svg class="i"><use href="#i-phone"/></svg>Anywhere</p><h2>On your phone, if you want it.</h2></div>
+        <p>The hub is only reachable on your machine. To see it from your phone, add a central hub on your own Cloudflare account, behind Google sign-in. It works while your machines sleep.</p>
+      </header>
+      <div class="phones">
+        <figure class="frame" style="margin:0"><img class="lt" src="img/phone-home-light-v1.webp" width="1170" height="2532" loading="lazy" alt="The hub's first screen on a phone." /><img class="dk" src="img/phone-home-v1.webp" width="1170" height="2532" loading="lazy" alt="The hub's first screen on a phone." /></figure>
+        <figure class="frame" style="margin:0"><img class="lt" src="img/phone-board-light-v1.webp" width="1170" height="2532" loading="lazy" alt="The board on a phone, one column at a time." /><img class="dk" src="img/phone-board-v1.webp" width="1170" height="2532" loading="lazy" alt="The board on a phone, one column at a time." /></figure>
+        <figure class="frame" style="margin:0"><img class="lt" src="img/phone-work-light-v2.webp" width="1170" height="2532" loading="lazy" alt="A task's page on a phone." /><img class="dk" src="img/phone-work-v2.webp" width="1170" height="2532" loading="lazy" alt="A task's page on a phone." /></figure>
+      </div>
+    </article>
+  </main>
+
+  <section class="start" id="start">
+    <h2>Set it up</h2>
+    <p>Give this to your coding agent. It installs the hub on macOS or Linux and tells your agents to keep a page for each task.</p>
+    <div class="prompt">
+      <span id="prompt-text">Set up https://github.com/<wbr>triptu/progress-hub on this machine. Follow PROMPT.md in that repo.</span>
+      <button class="copy" type="button" title="Copy" aria-label="Copy the prompt"><svg class="i idle"><use href="#i-copy"/></svg><svg class="i done"><use href="#i-check"/></svg></button>
+    </div>
+    <p class="sr copied" role="status" aria-live="polite"></p>
+    <div class="after">
+      <span>Any agent that can run a command can keep a page.</span>
+      <a href="https://github.com/triptu/progress-hub#readme">The rest is in the README</a>
+    </div>
+  </section>
+
+  <footer>
+    <span>Open source, MIT. Made by <a href="https://tushar.ai/" style="text-decoration:underline;text-underline-offset:3px">Tushar</a>.</span>
+    <nav>
+      <a href="https://github.com/triptu/progress-hub">GitHub</a>
+      <a href="https://sites.tushar.ai/projects/">More projects</a>
+    </nav>
+  </footer>
+</div>
+
+<dialog class="viewer" aria-label="Picture" autofocus>
+  <figure><img alt="" /><figcaption></figcaption></figure>
+  <button class="close" type="button" aria-label="Close" title="Close"><svg class="i"><use href="#i-x"/></svg></button>
+  <button class="prev" type="button" aria-label="Previous picture" title="Previous"><svg class="i"><use href="#i-left"/></svg></button>
+  <button class="next" type="button" aria-label="Next picture" title="Next"><svg class="i"><use href="#i-right"/></svg></button>
+</dialog>
+
+<script>
+  // Theme: System, Light or Dark, remembered.
+  const root = document.documentElement;
+  const picks = document.querySelectorAll('[data-theme-pick]');
+  const show = () => { const t = root.dataset.theme || 'system'; picks.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themePick === t))); };
+  picks.forEach(b => b.addEventListener('click', () => {
+    const t = b.dataset.themePick;
+    if (t === 'system') delete root.dataset.theme; else root.dataset.theme = t;
+    try { t === 'system' ? localStorage.removeItem('theme') : localStorage.setItem('theme', t); } catch (_) {}
+    show();
+  }));
+  show();
+
+  // The trailer: its poster (one per theme) and play button sit over the video until it is played.
+  const trailer = document.getElementById('trailer');
+  document.querySelector('.play').addEventListener('click', () => {
+    trailer.closest('.film').dataset.playing = '';
+    trailer.controls = true;
+    trailer.play();
+  });
+
+  // Pictures open large in the viewer, which steps through the ones showing in this theme.
+  const viewer = document.querySelector('.viewer');
+  const big = viewer.querySelector('img');
+  const caption = viewer.querySelector('figcaption');
+  const shown = () => [...document.querySelectorAll('main .frame img')].filter(img => img.offsetParent !== null);
+  let at = 0;
+  const view = k => {
+    const list = shown();
+    at = (k + list.length) % list.length;
+    const img = list[at];
+    big.src = img.currentSrc || img.src;
+    big.alt = img.alt;
+    caption.textContent = img.alt;
+  };
+  document.querySelectorAll('main .frame img').forEach(img => {
+    img.classList.add('zoom');
+    img.addEventListener('click', () => { view(shown().indexOf(img)); viewer.showModal(); });
+  });
+  viewer.querySelector('.close').addEventListener('click', () => viewer.close());
+  viewer.querySelector('.prev').addEventListener('click', () => view(at - 1));
+  viewer.querySelector('.next').addEventListener('click', () => view(at + 1));
+  viewer.addEventListener('click', e => { if (e.target === viewer || e.target.tagName === 'FIGURE') viewer.close(); });
+  viewer.addEventListener('keydown', e => { if (e.key === 'ArrowLeft') view(at - 1); if (e.key === 'ArrowRight') view(at + 1); });
+
+  // Copy the prompt.
+  const copy = document.querySelector('.copy');
+  const status = document.querySelector('.copied');
+  const text = document.getElementById('prompt-text');
+  copy.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(text.textContent.trim());
+    } catch (_) {
+      // No clipboard: select the prompt so it can be copied by hand.
+      getSelection().selectAllChildren(text);
+      status.textContent = 'Select and copy the prompt.';
+      return;
+    }
+    copy.dataset.copied = ''; copy.title = 'Copied'; status.textContent = 'Copied.';
+    setTimeout(() => { delete copy.dataset.copied; copy.title = 'Copy'; status.textContent = ''; }, 1600);
+  });
+
+</script>
+</body>
+</html>

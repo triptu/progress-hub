@@ -1,10 +1,14 @@
-# progress
+# progress-hub
 
-One page per task your coding agents are working on, and a hub in the browser that shows them all.
+<a href="https://progress-hub.tushar.ai/"><picture><source media="(prefers-color-scheme: light)" srcset="docs/trailer-poster-light.jpg"><img src="docs/trailer-poster.jpg" alt="The progress-hub trailer, 24 seconds"></picture></a>
 
-![The hub's first screen with two sample tasks. Each task is a card with its goal, where it stands, what it is waiting on you for, and how much it has under way.](docs/hub-home.png)
+Watch the trailer and see more at [progress-hub.tushar.ai](https://progress-hub.tushar.ai).
 
-When several agents run long tasks at once, it is hard to know which one is waiting for you and what each one finished. Each agent keeps one Markdown page for its task, and the hub shows the pages together. It runs on your machine, with no account.
+See what your coding agents are doing, and what they shipped.
+
+Coding agents work on their own, often on several long tasks at once. Each agent keeps one Markdown page for its task. A hub in your browser puts the pages on one board: what shipped, what is in progress, what is next and what needs you. Shipped work comes with the agent's screenshots, its pull requests and whether the change is live.
+
+The program is called `progress`. It runs on your machine, with no account.
 
 ## What you get
 
@@ -14,7 +18,7 @@ When several agents run long tasks at once, it is hard to know which one is wait
 
 The board has a column for what needs you, what is planned, what is in progress and what shipped, from all tasks. A dot marks a card that is new since you last looked.
 
-Any column can take the board's whole width, to skim it from top to bottom. Each card is then a row with everything on it: what its page says, its pictures large, whether it is live and its pull requests. The other columns fold into its heading.
+Any column can take the board's whole width. Give it to Shipped to skim everything your agents finished, from top to bottom. Each card is then a row with everything on it: what its page says, its pictures large, whether it is live and its pull requests. The other columns fold into its heading.
 
 ![The Shipped column given the board's whole width, with sample data. Each card is one row as wide as the board, with its text and large screenshots, and the other three columns are named beside its heading.](docs/hub-board-wide.png)
 
