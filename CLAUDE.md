@@ -39,11 +39,11 @@ bun run build    # the one program, in dist/
 
 ## The site
 
-`site/index.html` is the whole page: its styles, icons and script are inline, and `fonts/`, `img/`, the trailer and its posters sit beside it. A Vercel project with `site/` as its root serves it, and each push to main that changes `site/` deploys it (`site/vercel.json` skips the rest). Serve it locally with `python3 -m http.server 4792 -d site`.
+`site/index.html` is the whole page: its styles, icons and script are inline, and `fonts/`, `img/`, the video and its posters sit beside it. A Vercel project with `site/` as its root serves it, and each push to main that changes `site/` deploys it (`site/vercel.json` skips the rest). Serve it locally with `python3 -m http.server 4792 -d site`.
 
 - Its words say only what main does. Its pictures come from `bun run demo`, at 2×, with a light and a dark one for each.
 - A replaced picture or video gets a new file name (`-v2`), or caches keep showing the old one.
-- When the trailer changes, its posters (`trailer-poster-*.jpg`), the share image (`share-*.jpg`) and the README's poster (`docs/trailer-poster.jpg`) are taken from the new video in the same change.
+- When the video changes, its posters (`poster-*.jpg`), the share image (`share-*.jpg`) and the README's poster (`docs/video-poster*.jpg`) are taken from the new video in the same change.
 - Before merging, look at it at phone width and on a desktop, in light and dark, and check that nothing shifts on load or hover. A site change merges once those checks pass, without waiting for review.
 
 ## Rules

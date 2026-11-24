@@ -82,11 +82,13 @@
   .top nav { display: flex; align-items: center; gap: 8px; }
   .navlink { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 8px; color: var(--muted); text-decoration: none; font-size: 15px; font-weight: 500; transition: color var(--fast), background-color var(--fast); }
   .navlink:hover { color: var(--text); background: var(--surface); }
-  .theme { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--surface); }
-  .theme button { display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 7px; background: none; color: var(--muted); cursor: default; transition: color var(--fast), background-color var(--fast); }
-  .theme button:hover { color: var(--text); }
-  .theme button[aria-pressed="true"] { background: var(--bg); color: var(--text); box-shadow: 0 0 0 1px var(--line); }
-  .theme svg.i { width: 16px; height: 16px; }
+  /* One toggle: it shows the sun in the dark theme and the moon in the light one, and switches to that theme. */
+  .theme { display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: default; transition: color var(--fast), background-color var(--fast); }
+  .theme:hover { color: var(--text); background: var(--surface); }
+  .theme .sun { display: none; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .theme .sun { display: block; } :root:not([data-theme="light"]) .theme .moon { display: none; } }
+  :root[data-theme="dark"] .theme .sun { display: block; }
+  :root[data-theme="dark"] .theme .moon { display: none; }
 
   /* hero */
   .hero { padding: 88px 0 56px; text-align: center; }
@@ -102,7 +104,7 @@
   .btn:hover { box-shadow: inset 0 0 0 1px var(--faint); }
   .btn.primary { background: var(--btn-bg); color: var(--btn-text); box-shadow: none; }
   .btn.primary:hover { background: color-mix(in oklab, var(--btn-bg) 86%, var(--bg)); }
-  .btn:active, .navlink:active, .copy:active, .theme button:active { scale: 0.97; }
+  .btn:active, .navlink:active, .copy:active, .theme:active { scale: 0.97; }
 
   .fine { margin: 18px 0 0; font-size: 14px; color: var(--muted); }
   .film { margin: 56px auto 0; }
@@ -219,7 +221,6 @@
   <symbol id="i-play" viewBox="0 0 256 256"><path d="M240,128a15.74,15.74,0,0,1-7.6,13.51L88.32,229.65a16,16,0,0,1-16.2.3A15.86,15.86,0,0,1,64,216.13V39.87a15.86,15.86,0,0,1,8.12-13.82,16,16,0,0,1,16.2.3L232.4,114.49A15.74,15.74,0,0,1,240,128Z"/></symbol>
   <symbol id="i-copy" viewBox="0 0 256 256"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></symbol>
   <symbol id="i-check" viewBox="0 0 256 256"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></symbol>
-  <symbol id="i-monitor" viewBox="0 0 256 256"><path d="M208,40H48A24,24,0,0,0,24,64V176a24,24,0,0,0,24,24H208a24,24,0,0,0,24-24V64A24,24,0,0,0,208,40Zm8,136a8,8,0,0,1-8,8H48a8,8,0,0,1-8-8V64a8,8,0,0,1,8-8H208a8,8,0,0,1,8,8Zm-48,48a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h64A8,8,0,0,1,168,224Z"/></symbol>
   <symbol id="i-sun" viewBox="0 0 256 256"><path d="M120,40V16a8,8,0,0,1,16,0V40a8,8,0,0,1-16,0Zm72,88a64,64,0,1,1-64-64A64.07,64.07,0,0,1,192,128Zm-16,0a48,48,0,1,0-48,48A48.05,48.05,0,0,0,176,128ZM58.34,69.66A8,8,0,0,0,69.66,58.34l-16-16A8,8,0,0,0,42.34,53.66Zm0,116.68-16,16a8,8,0,0,0,11.32,11.32l16-16a8,8,0,0,0-11.32-11.32ZM192,72a8,8,0,0,0,5.66-2.34l16-16a8,8,0,0,0-11.32-11.32l-16,16A8,8,0,0,0,192,72Zm5.66,114.34a8,8,0,0,0-11.32,11.32l16,16a8,8,0,0,0,11.32-11.32ZM48,128a8,8,0,0,0-8-8H16a8,8,0,0,0,0,16H40A8,8,0,0,0,48,128Zm80,80a8,8,0,0,0-8,8v24a8,8,0,0,0,16,0V216A8,8,0,0,0,128,208Zm112-88H216a8,8,0,0,0,0,16h24a8,8,0,0,0,0-16Z"/></symbol>
   <symbol id="i-moon" viewBox="0 0 256 256"><path d="M233.54,142.23a8,8,0,0,0-8-2,88.08,88.08,0,0,1-109.8-109.8,8,8,0,0,0-10-10,104.84,104.84,0,0,0-52.91,37A104,104,0,0,0,136,224a103.09,103.09,0,0,0,62.52-20.88,104.84,104.84,0,0,0,37-52.91A8,8,0,0,0,233.54,142.23ZM188.9,190.34A88,88,0,0,1,65.66,67.11a89,89,0,0,1,31.4-26A106,106,0,0,0,96,56,104.11,104.11,0,0,0,200,160a106,106,0,0,0,14.92-1.06A89,89,0,0,1,188.9,190.34Z"/></symbol>
 </svg>
@@ -229,11 +230,7 @@
     <a class="brand" href="/"><span class="mark" aria-hidden="true"></span>progress-hub</a>
     <nav>
       <a class="navlink" href="https://github.com/triptu/progress-hub" aria-label="GitHub"><svg class="i"><use href="#i-github"/></svg><span>GitHub</span></a>
-      <div class="theme" role="group" aria-label="Theme">
-        <button type="button" data-theme-pick="system" title="Follow the system" aria-label="Follow the system"><svg class="i"><use href="#i-monitor"/></svg></button>
-        <button type="button" data-theme-pick="light" title="Light" aria-label="Light"><svg class="i"><use href="#i-sun"/></svg></button>
-        <button type="button" data-theme-pick="dark" title="Dark" aria-label="Dark"><svg class="i"><use href="#i-moon"/></svg></button>
-      </div>
+      <button class="theme" type="button"><svg class="i sun"><use href="#i-sun"/></svg><svg class="i moon"><use href="#i-moon"/></svg></button>
     </nav>
   </header>
 
@@ -253,13 +250,13 @@
     <p class="fine">Open source. Runs on your machine. No account.</p>
     <div class="film">
       <div class="frame">
-        <video playsinline preload="none" aria-label="The progress-hub trailer, 24 seconds" id="trailer">
-          <source src="trailer-v1.mp4" type="video/mp4" />
+        <video playsinline preload="none" aria-label="progress-hub in 24 seconds" id="video">
+          <source src="video-v1.mp4" type="video/mp4" />
         </video>
-        <button class="play" type="button" aria-label="Play the trailer, 24 seconds">
-          <img class="lt" src="trailer-poster-light-v3.jpg" width="1920" height="1080" alt="" />
-          <img class="dk" src="trailer-poster-v2.jpg" width="1920" height="1080" alt="" />
-          <span class="play-pill"><span class="play-dot"><svg class="i"><use href="#i-play"/></svg></span>Watch the trailer · 0:24</span>
+        <button class="play" type="button" aria-label="Play: see how it works, 24 seconds">
+          <img class="lt" src="poster-light-v1.jpg" width="1920" height="1080" alt="" />
+          <img class="dk" src="poster-v1.jpg" width="1920" height="1080" alt="" />
+          <span class="play-pill"><span class="play-dot"><svg class="i"><use href="#i-play"/></svg></span>See how it works · 0:24</span>
         </button>
       </div>
     </div>
@@ -343,25 +340,29 @@
 </dialog>
 
 <script>
-  // Theme: System, Light or Dark, remembered.
+  // Theme: follows the system until toggled. Toggling back to the system's theme follows it again.
   const root = document.documentElement;
-  const picks = document.querySelectorAll('[data-theme-pick]');
-  const show = () => { const t = root.dataset.theme || 'system'; picks.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themePick === t))); };
-  picks.forEach(b => b.addEventListener('click', () => {
-    const t = b.dataset.themePick;
-    if (t === 'system') delete root.dataset.theme; else root.dataset.theme = t;
-    try { t === 'system' ? localStorage.removeItem('theme') : localStorage.setItem('theme', t); } catch (_) {}
-    show();
-  }));
-  show();
+  const system = matchMedia('(prefers-color-scheme: dark)');
+  const toggle = document.querySelector('.theme');
+  const current = () => root.dataset.theme || (system.matches ? 'dark' : 'light');
+  const label = () => { const next = current() === 'dark' ? 'light' : 'dark'; toggle.setAttribute('aria-label', `Switch to the ${next} theme`); toggle.title = `Switch to the ${next} theme`; };
+  toggle.addEventListener('click', () => {
+    const next = current() === 'dark' ? 'light' : 'dark';
+    const followsSystem = next === (system.matches ? 'dark' : 'light');
+    if (followsSystem) delete root.dataset.theme; else root.dataset.theme = next;
+    try { followsSystem ? localStorage.removeItem('theme') : localStorage.setItem('theme', next); } catch (_) {}
+    label();
+  });
+  system.addEventListener('change', label);
+  label();
 
-  // The trailer: its poster (one per theme) and play button sit over the video until it is played.
-  const trailer = document.getElementById('trailer');
-  const film = trailer.closest('.film');
-  trailer.addEventListener('playing', () => { film.dataset.playing = ''; trailer.controls = true; }, { once: true });
+  // The video: its poster (one per theme) and play button sit over it until it plays.
+  const video = document.getElementById('video');
+  const film = video.closest('.film');
+  video.addEventListener('playing', () => { film.dataset.playing = ''; video.controls = true; }, { once: true });
   document.querySelector('.play').addEventListener('click', () => {
     film.dataset.loading = '';
-    trailer.play().catch(() => { delete film.dataset.loading; });
+    video.play().catch(() => { delete film.dataset.loading; });
   });
 
   // Pictures open large in the viewer, which steps through the ones showing in this theme.

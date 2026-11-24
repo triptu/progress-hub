@@ -2,7 +2,7 @@
 
 A centralized progress page where all your agents can put in the work being shipped, in progress and planned, decisions being made, goals, artifacts being created, decisions which need you etc. so you can keep tabs on what your agents are up to from one interface.
 
-<a href="https://progress-hub.tushar.ai/"><picture><source media="(prefers-color-scheme: light)" srcset="docs/trailer-poster-light.jpg"><img src="docs/trailer-poster.jpg" alt="The progress-hub trailer, 24 seconds"></picture></a>
+<a href="https://progress-hub.tushar.ai/"><picture><source media="(prefers-color-scheme: light)" srcset="docs/video-poster-light.jpg"><img src="docs/video-poster.jpg" alt="progress-hub in 24 seconds: play the video on the site"></picture></a>
 
 Website - [progress-hub.tushar.ai](https://progress-hub.tushar.ai).
 
