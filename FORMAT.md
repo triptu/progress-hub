@@ -144,7 +144,7 @@ progress remove "<line>"                      take an item off, such as a settle
 
 `add`, `move` and `reword` take `--under "<line>"`, once for each line to write under the item, after any it has, and `--pr <url>`, which puts the pull request at the start of the line unless it links it already. `move --as "<new first line>"` rewords the item on its way. A line that says it is in review or waiting on something goes to Shipped only with new words: `progress move "<line>" shipped --as "<what is now true>" --pr <url>`.
 
-Editing the file by hand is still fine, for anything these don't cover: the goal, a freeform section, changing the lines under an item, an ask written as prose.
+Editing the file by hand is still fine, for anything these don't cover: the goal, a freeform section, changing the lines under an item, an ask written as prose. So is making several changes at once: use your edit tool, never a script and never a rewrite of the whole file, then run `progress check`. It prints what the hub read, and anything a command would have refused, such as a first line that opens with a date. Change a line's words with `progress reword` even then.
 
 ## Todos
 

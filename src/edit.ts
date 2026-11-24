@@ -4,7 +4,7 @@
  * nothing is written.
  */
 import { GOAL_LEAD, kindOf, type LocatedItem, type LocatedPage, linkTargets, locatePage, SECTION_LABEL, type Span, withoutCode } from "./core/parse.ts";
-import { LONG_TITLE, liveLine, liveMark, plain, splitItem, withoutLiveMark } from "./core/text.ts";
+import { hasRun, LONG_TITLE, liveLine, liveMark, openingDate, plain, splitItem, underWay, withoutLiveMark, wordsOf } from "./core/text.ts";
 import type { Item, Page, SectionKind } from "./core/types.ts";
 
 /** The same command, ready to run again, with `line` as the item's first line and `under` as lines under it before any given. */
@@ -115,10 +115,6 @@ function oneLine(text: string, what: string): string {
   return line;
 }
 
-const MONTH = "(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\\.?";
-/** A line that opens with a date: "Nov 24", "24 Nov", "2026-11-24". */
-const DATED = new RegExp(`^(?:${MONTH}\\s+\\d{1,2}(?:st|nd|rd|th)?\\b|\\d{1,2}(?:st|nd|rd|th)?\\s+${MONTH}(?!\\p{L})|\\d{4}-\\d{1,2}-\\d{1,2}\\b)`, "iu");
-
 /**
  * A first line given to a command: one line, without its bullet, that opens with no date and, outside Decisions,
  * is short enough to be a card's name. A long one is refused with the command that splits it at its first sentence.
@@ -126,8 +122,8 @@ const DATED = new RegExp(`^(?:${MONTH}\\s+\\d{1,2}(?:st|nd|rd|th)?\\b|\\d{1,2}(?
 function firstLine(words: string, kind: SectionKind): string {
   const line = oneLine(words.trim().replace(/^[-*+]\s+/, ""), "The line");
   if (line === "") throw new EditError("Give the item's first line: it is the item's name on the board.");
-  const date = DATED.exec(plain(line).replace(/^[^\p{L}\p{N}]+/u, ""))?.[0];
-  if (date) {
+  const date = openingDate(line);
+  if (date !== null) {
     throw new EditError(`The line opens with a date, "${date}". The hub records when each line appeared, so a line never says when it was written.`);
   }
   if (kind !== "decisions" && line.length > LONG_TITLE) {
@@ -139,18 +135,14 @@ function firstLine(words: string, kind: SectionKind): string {
   return line;
 }
 
-/** Words that say a thing is still under way. Whole phrases, in any case. */
-const UNDER_WAY = ["in review", "waiting on", "waits on", "is building"];
-
 /**
  * Refuses to carry a line to Shipped as it is when it says the work is still under way, naming the words and the
  * command that gives it new ones. A line was written while the work was going on, and its words go stale when it
  * lands. Words given at the move are chosen then, so they are taken as they are.
  */
 function shippable(title: string): void {
-  const words = wordsOf(plain(title));
-  const phrase = UNDER_WAY.find((each) => hasRun(words, each.split(" ")));
-  if (phrase === undefined) return;
+  const phrase = underWay(title);
+  if (phrase === null) return;
   throw new EditError(
     `"${short(plain(title))}" says "${phrase}", which was true while it was under way. Give it the words that are true now in the same move, and put what is still open under it with --under "<line>":`,
     { line: "<what is now true>", under: [] },
@@ -208,9 +200,6 @@ function render(draft: Draft, marker: string): string[] {
   return [`${marker} ${head}`, ...draft.body.map((line) => (line.trim() === "" ? "" : pad + line))];
 }
 
-const WORD = /[\p{L}\p{N}]+/gu;
-const wordsOf = (text: string) => (text.toLowerCase().match(WORD) ?? []) as string[];
-
 /**
  * The addresses an item links, written as links or bare. A bare address counts only where it ends, at a space,
  * a closing bracket or the end, so one cut short by a parenthesis is not taken for a whole address.
@@ -225,12 +214,6 @@ function numbersOf(markdown: string): Set<string> {
   const numbers = [...targetsOf(markdown)].flatMap((url) => /\/(?:pull|issues)\/(\d+)(?:[/?#]|$)/.exec(url)?.[1] ?? []);
   for (const match of markdown.matchAll(/(?<![\w/&])#(\d+)\b/g)) if (match[1]) numbers.push(match[1]);
   return new Set(numbers);
-}
-
-/** Whether `words` stand together, in order, among `line`'s words. */
-function hasRun(line: readonly string[], words: readonly string[]): boolean {
-  for (let i = 0; i + words.length <= line.length; i++) if (words.every((word, n) => line[i + n] === word)) return true;
-  return false;
 }
 
 /** A name with no spaces that holds a `/`, or a `:` with more after it, is a link or a path, and names the item that links exactly it. */

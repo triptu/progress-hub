@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { isAbsolute, join, normalize, relative } from "node:path";
-import { LONG_TITLE, plain, splitItem, trimLines } from "./text.ts";
+import { LONG_TITLE, openingDate, plain, splitItem, trimLines, underWay } from "./text.ts";
 import type { Item, Page, Section, SectionKind, TryLink } from "./types.ts";
 
 export const SECTION_LABEL: Readonly<Record<SectionKind, string>> = { needs: "Needs you", doing: "In progress", next: "Next", decisions: "Decisions", shipped: "Shipped" };
@@ -285,6 +285,20 @@ function section(
   if (long.length > 0) {
     notes.push(`${SECTION_LABEL[kind]}: ${long.length === 1 ? "an item's first line runs" : `${long.length} items' first lines run`} past ${LONG_TITLE} characters. The first line is the item's name on the board: say what it is in a sentence, and put the rest on the lines under it.`);
   }
+  // The commands refuse these lines. A page edited by hand can still hold them, so the check names the first of each.
+  const dated = parsed.filter((entry) => openingDate(entry.title) !== null);
+  const [firstDated] = dated;
+  if (firstDated) {
+    const which = dated.length === 1 ? `"${clip(firstDated.title)}" opens with a date` : `${dated.length} items' first lines open with a date; the first is "${clip(firstDated.title)}"`;
+    notes.push(`${SECTION_LABEL[kind]}: ${which}. The hub records when each line appeared, so take the date off the line.`);
+  }
+  const stale = kind === "shipped" ? parsed.filter((entry) => underWay(entry.title) !== null) : [];
+  const [firstStale] = stale;
+  if (firstStale) {
+    const which = `"${clip(firstStale.title)}", which says "${underWay(firstStale.title)}"`;
+    const what = stale.length === 1 ? `${which}, was written while it was under way` : `${stale.length} items still say they are under way; the first is ${which}`;
+    notes.push(`Shipped: ${what}. Give ${stale.length === 1 ? "it" : "each"} the words that are true now, with what is still open under it: progress reword "<line>" "<what is now true>" --under "<what is still open>".`);
+  }
   if (kind === "shipped") {
     for (const entry of parsed) {
       const bare = /(?<![\w/[])#(\d+)\b/.exec(withoutCode(entry.markdown).replace(/\[[^\]]*\]\([^)]*\)/g, ""));
@@ -293,6 +307,9 @@ function section(
   }
   return { section: { heading: block.heading, kind, markdown, items: parsed }, located: { kind, span, items: located, nothing } };
 }
+
+/** A first line, cut short enough to name in a note, without the full stop it ends with: the note's own follows it. */
+const clip = (title: string) => (title.length > 60 ? `${title.slice(0, 59)}…` : title.replace(/\.$/, ""));
 
 function isTicked(entry: Entry): boolean {
   return /^[-*+]\s+\[[xX]\]\s/.test(entry.lines[0] ?? "");

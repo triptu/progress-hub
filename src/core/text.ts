@@ -100,6 +100,33 @@ export function withoutLiveMark(body: string): string {
   return body.split("\n").filter((_, at) => at !== found.at).join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
+const MONTH = "(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\\.?";
+/** A line that opens with a date: "Nov 24", "24 Nov", "2026-11-24". */
+const DATED = new RegExp(`^(?:${MONTH}\\s+\\d{1,2}(?:st|nd|rd|th)?\\b|\\d{1,2}(?:st|nd|rd|th)?\\s+${MONTH}(?!\\p{L})|\\d{4}-\\d{1,2}-\\d{1,2}\\b)`, "iu");
+
+/** The date a line of Markdown opens with, after any marks before its first word. The hub records when each line appeared, so a line never says it. */
+export function openingDate(line: string): string | null {
+  return DATED.exec(plain(line).replace(/^[^\p{L}\p{N}]+/u, ""))?.[0] ?? null;
+}
+
+/** Words that say a thing is still under way. Whole phrases, in any case. */
+const UNDER_WAY = ["in review", "waiting on", "waits on", "is building"];
+
+/** The phrase a line of Markdown uses to say its work is still under way, which goes stale once it ships. */
+export function underWay(line: string): string | null {
+  const words = wordsOf(plain(line));
+  return UNDER_WAY.find((each) => hasRun(words, each.split(" "))) ?? null;
+}
+
+const WORD = /[\p{L}\p{N}]+/gu;
+export const wordsOf = (text: string) => (text.toLowerCase().match(WORD) ?? []) as string[];
+
+/** Whether `words` stand together, in order, among `line`'s words. */
+export function hasRun(line: readonly string[], words: readonly string[]): boolean {
+  for (let i = 0; i + words.length <= line.length; i++) if (words.every((word, n) => line[i + n] === word)) return true;
+  return false;
+}
+
 /** A first line past this many characters is a paragraph, not a name. */
 export const LONG_TITLE = 160;
 

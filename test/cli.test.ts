@@ -733,6 +733,69 @@ test("a line that opens with a date is refused, by add, reword and --as", () => 
   expect(run("add", "next", "3 marbles fall.").code).toBe(0);
 });
 
+test("check names lines edited in by hand that open with a date, once per section", () => {
+  const { env } = page(
+    [
+      "## Decisions",
+      "",
+      ...Array.from({ length: 60 }, (_, n) => `- Nov ${(n % 28) + 1}: picked the queue that keeps every retry, number ${n}.`),
+      "- Chose to ship on Nov 24.",
+      "",
+      "## Next",
+      "",
+      "- 3 of 9 tests fail.",
+      "- **2026-11-24** measure on a 3G profile.",
+      "",
+    ].join("\n"),
+  );
+  const out = progress(["check", "search-speed"], env).out;
+  expect(out).toContain('  - Decisions: 60 items\' first lines open with a date; the first is "Nov 1: picked the queue that keeps every retry, number 0". The hub records when each line appeared, so take the date off the line.\n');
+  expect(out).toContain('  - Next: "2026-11-24 measure on a 3G profile" opens with a date. The hub records when each line appeared, so take the date off the line.\n');
+  expect(out.match(/opens? with a date/g)).toHaveLength(2);
+});
+
+test("check names Shipped lines edited in by hand that still say they are under way", () => {
+  const phrases = ["in review", "waiting on", "waits on", "is building"];
+  const { env } = page(
+    [
+      "## In progress",
+      "",
+      "- The deploy is waiting on DNS.",
+      "",
+      "## Shipped",
+      "",
+      ...phrases.map((phrase) => `- Devices dialog, which ${phrase} the last step.`),
+      "- The log names the device.",
+      "  Its follow-up is in review.",
+      "",
+    ].join("\n"),
+  );
+  const out = progress(["check", "search-speed"], env).out;
+  expect(out).toContain(
+    '  - Shipped: 4 items still say they are under way; the first is "Devices dialog, which in review the last step", which says "in review". Give each the words that are true now, with what is still open under it: progress reword "<line>" "<what is now true>" --under "<what is still open>".\n',
+  );
+  expect(out.match(/under way/g)).toHaveLength(1);
+});
+
+test("a page the commands wrote has none of these notes", () => {
+  const { env, run } = page("Fast.\n\n## Goal\n\nRetries survive.\n\n## In progress\n\n- Retry queue survives a restart.\n");
+  for (const args of [
+    ["add", "decisions", "Chose to ship on Nov 24."],
+    ["add", "next", "3 of 9 tests fail."],
+    ["add", "doing", "Wire the March 3 numbers in."],
+    ["move", "retry queue", "shipped"],
+    ["reword", "retry queue", "Retry queue survives a restart, built on 2026-11-24."],
+  ]) {
+    expect(run(...args).code).toBe(0);
+  }
+  expect(progress(["check", "search-speed"], env).out).toContain("Nothing to fix.");
+});
+
+test("the sample pages check clean", () => {
+  const env = { PROGRESS_HOME: join(import.meta.dir, "pages"), HOME: mkdtempSync(join(tmpdir(), "progress-cli-")) };
+  for (const work of ["search-speed", "sync-reliability"]) expect(progress(["check", work], env).out).toContain("Nothing to fix.");
+});
+
 test("a first line over the limit is refused with the command that splits it, ready to run", () => {
   const { run, read } = page(WORK);
   const first = "Once pull request #148 is live, re-read 60 days of records.";

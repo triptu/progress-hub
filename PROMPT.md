@@ -6,7 +6,7 @@ You are setting up the progress hub for the person who gave you this file. Do ea
 2. **Get the code.** If this repo is not on the machine yet, clone https://github.com/triptu/progress-hub into a folder that lasts, such as `~/code/progress-hub`, not a temporary one. Setup builds from the clone, and an update is a pull and setup again.
 3. **Run `bash setup.sh`** in the clone. It builds `progress` and puts it in `~/.local/bin`. It prints an `ok` line for what is ready and a `todo` line for each thing left to do.
    - Do every `todo` you can. The usual one is putting `~/.local/bin` on the `PATH` the person's agents start with, in their shell profile.
-   - Tell the person about a `todo` only they can do, such as signing in to `gh` or connecting Tailscale. Both are optional: `gh` adds pull request titles, and Tailscale on a Mac opens the hub from their phone.
+   - Tell the person about a `todo` only they can do, such as signing in to `gh`. It is optional: `gh` adds pull request titles.
    - Pages are kept in `~/progress`. If the person wants another folder, run `PROGRESS_HOME=/that/folder bash setup.sh` instead.
    - On macOS setup starts the hub as a login service. On Linux nothing starts it. Run `progress serve` the way that machine keeps a program running (a systemd user unit, for one), or tell the person to start it. Check that the address it prints answers.
 4. **Tell their agents.** Add the two lines below to the instruction file each of their agents reads on every task, such as `~/.claude/CLAUDE.md` or `~/.codex/AGENTS.md`. Ask which agents they use if you can't tell.
@@ -22,7 +22,7 @@ You are setting up the progress hub for the person who gave you this file. Do ea
 
 - **Update.** Pull in the clone, then run `bash setup.sh` again. On Linux, restart `progress serve` after it.
 - **Move the pages.** Move the folder, then run `PROGRESS_HOME=/new/folder bash setup.sh`.
-- **Remove.** On macOS, run `launchctl bootout gui/$(id -u)/progress.hub` and delete `~/Library/LaunchAgents/progress.hub.plist` and `~/Library/Logs/progress.log`. On Linux, stop `progress serve` and undo whatever you set up to keep it running. Delete `~/.local/bin/progress` and `~/.config/progress`, and take the two lines out of the instruction files and the `PATH` line out of the shell profile if you added one. If setup made a Tailscale forward, `tailscale serve status` shows it, and it is yours to turn off. Leave the pages folder unless the person says to delete their pages.
+- **Remove.** On macOS, run `launchctl bootout gui/$(id -u)/progress.hub` and delete `~/Library/LaunchAgents/progress.hub.plist` and `~/Library/Logs/progress.log`. On Linux, stop `progress serve` and undo whatever you set up to keep it running. Delete `~/.local/bin/progress` and `~/.config/progress`, and take the two lines out of the instruction files and the `PATH` line out of the shell profile if you added one. An older setup may have made a Tailscale forward for the hub's port: `tailscale serve status` shows it, and `tailscale serve --http=4747 off` turns it off. Leave the pages folder unless the person says to delete their pages.
 
 ## A central hub
 

@@ -32,7 +32,7 @@ const USAGE = `progress: one Markdown progress page per piece of work, and a hub
                              credential made for this machine on standard input, and restart the hub.
   progress serve             start the hub on http://127.0.0.1:4747 ($PROGRESS_PORT changes the port).
                              It answers only to 127.0.0.1, localhost and the names in $PROGRESS_HOSTS
-                             (comma separated), such as the machine's tailnet names.
+                             (comma separated), for a machine reached by another name.
 
 Keeping the page. Each command changes only the lines it is about, or changes nothing and says why.
 A line is named by words that stand together in its first line, in any case, or by a link or
@@ -44,7 +44,10 @@ line appeared. Sections are needs, doing, next, decisions and shipped.
 Where a command writes a first line, --pr <url> puts the pull request at its start, unless the
 line links it already, and --under "<line>", given once for each line, writes lines under it,
 after any that are there. Where the work stands goes under the line, never in it.
---work <work> names another page. Editing the file by hand is still fine.
+--work <work> names another page. Editing the file by hand is still fine. For several changes at
+once, use the edit tool, never a script and never a rewrite of the whole file, then run progress
+check: it prints what the hub read and anything a command would have refused. Change a line's
+words with reword, never by hand.
 
   progress summary "<text>"  replace the summary at the top of the page.
   progress add <section> "<line>"

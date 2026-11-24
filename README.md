@@ -51,7 +51,7 @@ This tab shows the screenshots, videos and pages your agents made, from every ta
   <img src="docs/phone-work.png" width="30%" alt="A task's page on a phone.">
 </p>
 
-On a Mac with Tailscale, setup makes the hub reachable from your phone and your other machines. A central hub on your own Cloudflare account can also show every machine's work at one address, behind a Google sign-in, while the machines sleep.
+The hub runs on your machine and answers only there. To read it on your phone, set up a central hub on your own Cloudflare account: it shows every machine's work at one address, behind a Google sign-in, while the machines sleep.
 
 ## Getting started
 

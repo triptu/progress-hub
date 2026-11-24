@@ -49,15 +49,9 @@ if found=$(command -v gh); then
   dir=$(dirname "$found")
   case ":$hub_path:" in *":$dir:"*) ;; *) hub_path="$dir:$hub_path";; esac
 else todo "install gh, so the hub can show pull request titles"; fi
-# The hub answers only to the names it is reached by, so a website can't read it through DNS rebinding.
-hosts=""
-tailnet=false
-if command -v tailscale >/dev/null && command -v jq >/dev/null && status=$(tailscale status --json 2>/dev/null) &&
-  printf '%s' "$status" | jq -e '.BackendState == "Running"' >/dev/null; then
-  dns=$(printf '%s' "$status" | jq -r '.Self.DNSName | rtrimstr(".")')
-  hosts="$dns,${dns%%.*}"
-  tailnet=true
-fi
+# The hub answers only to the names it is reached by, so a website can't read it through DNS rebinding:
+# this machine, and any names given in PROGRESS_HOSTS.
+hosts=${PROGRESS_HOSTS:-}
 plist="$HOME/Library/LaunchAgents/$label.plist"
 log="$HOME/Library/Logs/$name.log"
 # Escape paths before putting them in XML.
@@ -105,19 +99,3 @@ elif [ -n "$holder" ] && [ "$holder" != "$pid" ]; then
   todo "port $port is held by $(ps -o comm= -p "$holder") (pid $holder), so $label can't start; stop it or set PROGRESS_PORT, then re-run"; exit 1
 else todo "$label did not start; read $log"; exit 1; fi
 ok "local: http://127.0.0.1:$port"
-if ! command -v tailscale >/dev/null || ! command -v jq >/dev/null; then
-  todo "install Tailscale and jq for the phone link"; exit 0
-fi
-if [ "$tailnet" != true ]; then todo "connect Tailscale, then re-run for the phone link"; exit 0; fi
-if ! config=$(tailscale serve status --json); then todo "could not read Tailscale serve settings"; exit 0; fi
-# Never replace another service on this port, including a public Funnel.
-if printf '%s' "$config" | jq -e --arg p "$port" '.TCP[$p] != null or any((.Web // {} | keys[]); endswith(":" + $p))' >/dev/null; then
-  if printf '%s' "$config" | jq -e --arg p "$port" --arg host "$dns:$port" --arg target "http://127.0.0.1:$port" '
-    .TCP[$p].HTTP == true and .Web[$host].Handlers["/"].Proxy == $target and
-    (.Web[$host].Handlers | keys == ["/"]) and
-    ([.AllowFunnel // {} | .[]] | any(. == true) | not)' >/dev/null; then
-    ok "tailnet: http://$dns:$port"
-  else todo "Tailscale port $port already has a service; left it alone"; fi
-elif tailscale serve --bg --http="$port" --yes "http://127.0.0.1:$port"; then
-  ok "tailnet: http://$dns:$port"
-else todo "Tailscale forward failed; check tailnet permissions, then re-run"; fi
