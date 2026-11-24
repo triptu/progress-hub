@@ -117,6 +117,8 @@
   .play:hover .play-pill { scale: 1.03; }
   .play:active .play-pill { scale: 0.98; }
   .film[data-playing] .play { display: none; }
+  .film[data-loading] .play-dot { animation: pulse 0.9s ease-in-out infinite alternate; }
+  @keyframes pulse { to { opacity: 0.45; } }
   .play-pill { white-space: nowrap; }
   @media (max-width: 860px) { .play-pill { gap: 9px; padding: 6px 14px 6px 6px; font-size: 14px; } .play-dot { width: 30px; height: 30px; } .play-dot svg.i { width: 13px; height: 13px; } }
 
@@ -138,14 +140,14 @@
   .start { margin: 120px 0 0; padding: 72px 0 0; }
   .start h2 { text-align: center; }
   .start > p { max-width: 34em; margin: 16px auto 0; text-align: center; color: var(--muted); }
-  .prompt { position: relative; max-width: 920px; margin: 36px auto 0; padding: 22px 64px 22px 24px; border-radius: var(--radius); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); font: 450 15px/1.65 var(--mono); overflow-wrap: break-word; }
+  .prompt { position: relative; max-width: 960px; margin: 36px auto 0; padding: 22px 64px 22px 24px; border-radius: var(--radius); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); font: 450 15px/1.65 var(--mono); overflow-wrap: break-word; }
   .copy { position: absolute; top: 14px; right: 14px; display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: default; transition: color var(--fast), background-color var(--fast); }
   .copy:hover { color: var(--text); background: var(--bg); }
   .copy .done { display: none; color: var(--shipped); }
   .copy[data-copied] .idle { display: none; }
   .copy[data-copied] .done { display: block; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .after { max-width: 920px; margin: 18px auto 0; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; font-size: 15px; color: var(--muted); }
+  .after { max-width: 960px; margin: 18px auto 0; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; font-size: 15px; color: var(--muted); }
   .after a { text-underline-offset: 3px; text-decoration-color: var(--faint); }
   .after a:hover { text-decoration-color: currentColor; }
 
@@ -156,7 +158,9 @@
 
   /* The picture viewer: a picture large, with the one before and after. */
   .viewer { width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: transparent; color: #fff; }
-  .viewer::backdrop { background: oklch(10% 0 0 / 0.96); }
+  .viewer::backdrop { background: oklch(10% 0 0); }
+  html:has(dialog[open]) { overflow: hidden; }
+  .zoom:focus-visible { outline: 3px solid var(--new); outline-offset: -3px; border-radius: inherit; }
   .viewer:focus { outline: none; }
   .viewer[open] { display: grid; place-items: center; }
   .viewer figure { margin: 0; display: grid; justify-items: center; gap: 14px; padding: 56px 72px 24px; }
@@ -167,7 +171,7 @@
   .viewer .close { top: 16px; right: 16px; }
   .viewer .prev { left: 16px; top: 50%; translate: 0 -50%; }
   .viewer .next { right: 16px; top: 50%; translate: 0 -50%; }
-  @media (max-width: 860px) { .viewer figure { padding: 64px 8px 72px; } .viewer img { max-width: calc(100vw - 16px); max-height: calc(100dvh - 160px); } .viewer .prev, .viewer .next { top: auto; bottom: 16px; translate: none; } }
+  @media (max-width: 860px) { .viewer[open] { place-items: center start; } .viewer figure { max-width: 100vw; overflow-x: auto; justify-items: start; padding: 64px 8px 72px; } .viewer img { max-width: none; height: min(62dvh, 520px); max-height: none; } .viewer figcaption { position: sticky; left: 0; width: calc(100vw - 16px); } .viewer .prev, .viewer .next { top: auto; bottom: 16px; translate: none; } }
 
   @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 
@@ -188,7 +192,7 @@
     .point header > p { padding-top: 0; font-size: 16.5px; }
     .pair { grid-template-columns: 1fr; }
     /* One phone at a time, swiped. */
-    .phones { display: flex; gap: 14px; margin: 0 calc(-1 * var(--gutter)); padding: 4px var(--gutter) 24px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+    .phones { display: flex; justify-content: flex-start; gap: 14px; margin: 0 calc(-1 * var(--gutter)); padding: 4px var(--gutter) 24px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
     .phones::-webkit-scrollbar { display: none; }
     .phones .frame { flex: 0 0 72%; scroll-snap-align: center; border-radius: 22px; }
     .frame { border-radius: 8px; }
@@ -253,7 +257,7 @@
           <source src="trailer-v1.mp4" type="video/mp4" />
         </video>
         <button class="play" type="button" aria-label="Play the trailer, 24 seconds">
-          <img class="lt" src="trailer-poster-light-v2.jpg" width="1920" height="1080" alt="" />
+          <img class="lt" src="trailer-poster-light-v3.jpg" width="1920" height="1080" alt="" />
           <img class="dk" src="trailer-poster-v2.jpg" width="1920" height="1080" alt="" />
           <span class="play-pill"><span class="play-dot"><svg class="i"><use href="#i-play"/></svg></span>Watch the trailer · 0:24</span>
         </button>
@@ -275,18 +279,18 @@
 
     <article class="point">
       <header>
-        <div><p class="tag" style="color:var(--shipped)"><svg class="i"><use href="#i-rocket"/></svg>Shipped</p><h2>Everything they shipped, with the screenshots.</h2></div>
+        <div><p class="tag"><svg class="i" style="color:var(--shipped)"><use href="#i-rocket"/></svg>Shipped</p><h2>Everything they shipped, with the screenshots.</h2></div>
         <p>Give Shipped the board's whole width and skim it from top to bottom. Each row has what the agent wrote, its screenshots large, its pull requests and whether the change is live. Open a card to read it in full, and step to the next with the arrow keys.</p>
       </header>
       <figure class="frame" style="margin:0">
-        <picture class="lt"><source media="(max-width: 860px)" srcset="img/shipped-row-light-v1.webp" width="1360" height="620" /><img src="img/wide-light-v2.webp" width="2880" height="1800" loading="lazy" alt="The Shipped column across the board's whole width, each change one row with its pull request, whether it is live, and its screenshots." /></picture>
-        <picture class="dk"><source media="(max-width: 860px)" srcset="img/shipped-row-v1.webp" width="1360" height="620" /><img src="img/wide-v2.webp" width="2880" height="1800" loading="lazy" alt="The Shipped column across the board's whole width, each change one row with its pull request, whether it is live, and its screenshots." /></picture>
+        <picture class="lt"><source media="(max-width: 860px)" srcset="img/shipped-row-light-v2.webp" width="1360" height="1100" /><img src="img/wide-light-v2.webp" width="2880" height="1800" loading="lazy" alt="The Shipped column across the board's whole width, each change one row with its pull request, whether it is live, and its screenshots." /></picture>
+        <picture class="dk"><source media="(max-width: 860px)" srcset="img/shipped-row-v2.webp" width="1360" height="1100" /><img src="img/wide-v2.webp" width="2880" height="1800" loading="lazy" alt="The Shipped column across the board's whole width, each change one row with its pull request, whether it is live, and its screenshots." /></picture>
       </figure>
     </article>
 
     <article class="point">
       <header>
-        <div><p class="tag" style="color:var(--new)"><svg class="i"><use href="#i-sparkle"/></svg>A task's page</p><h2>A page that opens with what changed.</h2></div>
+        <div><p class="tag"><svg class="i" style="color:var(--new)"><use href="#i-sparkle"/></svg>A task's page</p><h2>A page that opens with what changed.</h2></div>
         <p>A task's page starts with what is new since your last visit. Under that are its goal, the questions waiting for your answer, and the rest as the agent wrote it.</p>
       </header>
       <figure class="frame" style="margin:0">
@@ -353,10 +357,11 @@
 
   // The trailer: its poster (one per theme) and play button sit over the video until it is played.
   const trailer = document.getElementById('trailer');
+  const film = trailer.closest('.film');
+  trailer.addEventListener('playing', () => { film.dataset.playing = ''; trailer.controls = true; }, { once: true });
   document.querySelector('.play').addEventListener('click', () => {
-    trailer.closest('.film').dataset.playing = '';
-    trailer.controls = true;
-    trailer.play();
+    film.dataset.loading = '';
+    trailer.play().catch(() => { delete film.dataset.loading; });
   });
 
   // Pictures open large in the viewer, which steps through the ones showing in this theme.
@@ -369,14 +374,21 @@
     const list = shown();
     at = (k + list.length) % list.length;
     const img = list[at];
-    big.src = img.currentSrc || img.src;
+    big.src = img.src;
     big.alt = img.alt;
     caption.textContent = img.alt;
   };
+  let opener = null;
+  const open = img => { opener = img; view(shown().indexOf(img)); viewer.showModal(); };
   document.querySelectorAll('main .frame img').forEach(img => {
     img.classList.add('zoom');
-    img.addEventListener('click', () => { view(shown().indexOf(img)); viewer.showModal(); });
+    img.tabIndex = 0;
+    img.setAttribute('role', 'button');
+    img.setAttribute('aria-label', 'Open larger: ' + img.alt);
+    img.addEventListener('click', () => open(img));
+    img.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(img); } });
   });
+  viewer.addEventListener('close', () => { if (opener) opener.focus({ preventScroll: true }); });
   viewer.querySelector('.close').addEventListener('click', () => viewer.close());
   viewer.querySelector('.prev').addEventListener('click', () => view(at - 1));
   viewer.querySelector('.next').addEventListener('click', () => view(at + 1));
