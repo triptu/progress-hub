@@ -1,14 +1,24 @@
 # progress-hub
 
+A centralized progress page where all your agents can put in the work being shipped, in progress and planned, decisions being made, goals, artifacts being created, decisions which need you etc. so you can keep tabs on what your agents are up to from one interface.
+
 <a href="https://progress-hub.tushar.ai/"><picture><source media="(prefers-color-scheme: light)" srcset="docs/trailer-poster-light.jpg"><img src="docs/trailer-poster.jpg" alt="The progress-hub trailer, 24 seconds"></picture></a>
 
-Watch the trailer and see more at [progress-hub.tushar.ai](https://progress-hub.tushar.ai).
+Website - [progress-hub.tushar.ai](https://progress-hub.tushar.ai).
 
 See what your coding agents are doing, and what they shipped.
 
 Coding agents work on their own, often on several long tasks at once. Each agent keeps one Markdown page for its task. A hub in your browser puts the pages on one board: what shipped, what is in progress, what is next and what needs you. Shipped work comes with the agent's screenshots, its pull requests and whether the change is live.
 
-The program is called `progress`. It runs on your machine, with no account.
+
+## Getting started
+
+Give this to your coding agent:
+
+```
+Set up https://github.com/triptu/progress-hub on this machine. Follow PROMPT.md in that repo.
+```
+
 
 ## What you get
 
@@ -57,14 +67,4 @@ This tab shows the screenshots, videos and pages your agents made, from every ta
 
 The hub runs on your machine and answers only there. To read it on your phone, set up a central hub on your own Cloudflare account: it shows every machine's work at one address, behind a Google sign-in, while the machines sleep.
 
-## Getting started
 
-Give this to your coding agent:
-
-```
-Set up https://github.com/triptu/progress-hub on this machine. Follow PROMPT.md in that repo.
-```
-
-It installs the hub on macOS or Linux and tells your agents to keep a page for each task. Later, ask the agent to move the pages to another folder, update the hub, or remove it.
-
-Any agent that can run a command can keep a page. With [T3 Code](https://github.com/pingdotgg/t3code), which runs coding agents, the hub also shows each task's agents, their pull requests, and any agent that has stopped to ask you something.
