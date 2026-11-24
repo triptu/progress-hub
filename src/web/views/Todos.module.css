@@ -348,13 +348,8 @@
   inset: -13px;
 }
 
-.todoCheck:hover:not([role="img"]) {
+.todoCheck:hover {
   color: var(--text);
-}
-
-/* On a hub that takes no change to todos, the ring is a mark to read, not a button. */
-.todoCheck[role="img"] {
-  color: var(--muted);
 }
 
 /* What is still to do is edited with a click on its words. */

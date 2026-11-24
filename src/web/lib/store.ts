@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from "react";
 import type { HubState, Media, WorkDetail, WorkId } from "../../core/types.ts";
+import { nameWorks } from "./route.ts";
 
 /**
  * The hub's data, keyed by API path. Each path keeps the raw JSON it last received, so a refresh
@@ -23,6 +24,22 @@ function emit() {
   for (const listener of listeners) listener();
 }
 
+const WORK = "/api/work/";
+
+/**
+ * Keeps what a path answered. The state says which works there are, which is what the addresses name them from.
+ * A work asked for by the name in an address is kept under its id too, which is what the app asks by from then on.
+ */
+function keep(path: string, raw: string): void {
+  const value: unknown = JSON.parse(raw);
+  entries.set(path, { raw, value });
+  if (path === "/api/state") nameWorks(((value as HubState).works ?? []).map((work) => work.id));
+  if (path.startsWith(WORK)) {
+    const own = `${WORK}${encodeURIComponent((value as WorkDetail).summary.id)}`;
+    if (own !== path && !entries.has(own)) entries.set(own, { raw, value });
+  }
+}
+
 /** Paths asked for again while a request was out. That answer may be older than the ask, so each is fetched once more. */
 const stale = new Set<string>();
 
@@ -38,9 +55,7 @@ function refresh(path: string): Promise<void> {
       if (!response.ok) throw new Error(`${path}: ${response.status}`);
       const raw = await response.text();
       const changed = entries.get(path)?.raw !== raw;
-      if (changed) {
-        entries.set(path, { raw, value: JSON.parse(raw) });
-      }
+      if (changed) keep(path, raw);
       fetched.add(path);
       if (changed || !reachable) {
         reachable = true;
@@ -98,12 +113,6 @@ function useResource<T>(path: string | null): T | null {
 
 export const useHub = () => useResource<HubState>("/api/state");
 
-/**
- * Whether this hub takes a change to the todos. A hub that takes none, such as a central one, says so in its state,
- * and the app then offers no control that would make one. This is the one place the app reads that.
- */
-export const useTodosWritable = () => useHub()?.todosReadOnly !== true;
-
 /** Whether this hub is behind a sign-in, so the app offers a way to sign out. */
 export const useSignedIn = () => useHub()?.signedIn === true;
 
@@ -144,7 +153,7 @@ export function takeOver(paths: readonly string[]): boolean {
     const kept = JSON.parse(sessionStorage.getItem(KEPT) ?? "null") as { app?: unknown; raw?: Record<string, unknown> } | null;
     sessionStorage.removeItem(KEPT);
     if (app === null || kept?.app !== app) return false;
-    for (const [path, raw] of Object.entries(kept.raw ?? {})) if (typeof raw === "string") entries.set(path, { raw, value: JSON.parse(raw) });
+    for (const [path, raw] of Object.entries(kept.raw ?? {})) if (typeof raw === "string") keep(path, raw);
   } catch {
     return false;
   }

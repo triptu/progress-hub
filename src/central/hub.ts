@@ -1,11 +1,12 @@
-import type { Health, HubState, Marks, Media, Todo, WorkDetail, WorkId } from "../core/types.ts";
+import type { Health, HubState, Marks, Media, Todo, TodoChange, WorkDetail, WorkId } from "../core/types.ts";
+import { applyTodoChange } from "../core/todos.ts";
 import { read } from "../server/routes.ts";
-import { readDetail, readMedia, readState, type Peer } from "../stores/remote.ts";
+import { readDetail, readMedia, readState, type Machine } from "./received.ts";
 import { FROM, Stores, type OtherStore, type StoreState, type WorkStore } from "../stores/store.ts";
 import { adoptMarks, ownMark, ownsMark } from "../core/marks.ts";
 import { sha256Hex } from "./login.ts";
 import { listOf, readOrNull } from "../core/reader.ts";
-import { FORMAT, MOST_MACHINE_BYTES, MOST_MACHINES, MOST_ORDERS, MOST_ROW_BYTES, MOST_SEND_BYTES, readCapped, readMarks, readSend, readTodo, type Answer, type Forgotten, type HeldMachine, type MarkChange, type MarkOrder, type StateSend } from "./protocol.ts";
+import { FORMAT, MOST_MACHINE_BYTES, MOST_MACHINES, MOST_ORDERS, MOST_ROW_BYTES, MOST_SEND_BYTES, MOST_TODO_BYTES, MOST_TODOS, readCapped, readMarks, readSend, readTodo, type Answer, type Forgotten, type HeldMachine, type MarkChange, type MarkOrder, type StateSend } from "./protocol.ts";
 
 /**
  * The central hub's one Durable Object: what every machine sent, kept in its SQLite storage, and the hub's
@@ -13,8 +14,8 @@ import { FORMAT, MOST_MACHINE_BYTES, MOST_MACHINES, MOST_ORDERS, MOST_ROW_BYTES,
  * under the machine's id and the file's digest, and are served only through the paths the machine's state names.
  *
  * Who a machine is comes from the Worker, which read it from the machine's credential. The routes under `/_/`
- * are the Worker's alone: it sends a browser only `/api/`, `/files/` and a change to marks it has read to `/_/marks`,
- * and the deployer's orders to `/_/machines` and `/_/forget`.
+ * are the Worker's alone: it sends a browser only `/api/`, `/files/` and a change to marks or todos it has read to
+ * `/_/marks` and `/_/todos`, and the deployer's orders to `/_/machines` and `/_/forget`.
  *
  * A machine's own marks file stays the one place its marks are kept. A mark changed here is an order for the
  * machine whose works it is about. The hub keeps the order, shows it over the marks that machine last sent, and
@@ -22,6 +23,10 @@ import { FORMAT, MOST_MACHINE_BYTES, MOST_MACHINES, MOST_ORDERS, MOST_ROW_BYTES,
  * hub would, and says so in its sends. The order goes only once a state the hub shows says the machine applied it,
  * so the mark is always in one of the two. If the user changes the same mark the other way on the machine's own
  * hub before the machine has taken the order, the order still arrives and wins.
+ *
+ * The todos are the user's, not a machine's, and the hub keeps the one list. A todo a machine sends with its state
+ * is taken into it once: the hub remembers, for each machine, the ids it took from it, and names them in its answer
+ * so the machine can let them go. A todo the user removes here never comes back from a machine that sends it again.
  *
  * Written against the parts of Cloudflare's API it uses, so the tests run it as it is.
  */
@@ -51,7 +56,7 @@ export const MACHINE_HEADER = "x-progress-machine";
 /** What a machine whose credential is refused is told: the same for one this hub never made and one removed. */
 export const NOT_LINKED = "A machine sends the credential it was linked with.";
 
-/** A machine that has sent nothing for this long is shown the way a peer that stopped answering is. */
+/** A machine that has sent nothing for this long is shown as quiet. */
 export const QUIET_MS = 150_000;
 /** How far ahead of the hub's clock a machine's may run. A state from further ahead would hold back every later one. */
 const AHEAD_MS = 10 * 60_000;
@@ -72,7 +77,6 @@ interface Held {
   readonly store: Omit<StoreState, "health">;
   readonly media: readonly Media[];
   readonly marks: Marks;
-  readonly todos: readonly Todo[];
 }
 
 interface Kept {
@@ -113,6 +117,8 @@ interface Shown {
  *   pending:<machine>        what its newest send that lacked something may upload (Pending)
  *   stored:<machine>         the bytes of the files it has put in the bucket
  *   orders:<machine>         the marks changed here that it has not shown it applied (Orders)
+ *   todos                    the user's todos, newest first
+ *   taken:<machine>          the ids of its todos taken into them, as it names them, that it still sent last
  *   forgotten:<machine>      when the deployer removed it: its credential is refused from then on
  *   spent:<key>              a nonce or a token used to sign in, until it expires
  *   spentBy:<until>:<key>    the same, in the order they expire
@@ -155,10 +161,22 @@ export class CentralHub {
       const state = parse<Shown>(stored);
       if (!state) continue;
       shown.set(machine, state);
+      this.takeEarlier(machine, state);
       this.heard.set(machine, Number(this.kv.get(`heard:${machine}`) ?? 0));
     }
     this.shown = shown;
     return shown;
+  }
+
+  /**
+   * A state an earlier build kept holds the machine's todos beside it, which that build showed from there. They are
+   * taken as a send's are, once: a machine with nothing new to say only says hello, and would never send them again.
+   */
+  private takeEarlier(machine: string, state: Shown): void {
+    const earlier = readOrNull(listOf(readTodo), (state.held as { todos?: unknown }).todos ?? []) ?? [];
+    if (earlier.length === 0 || this.kv.get(`taken:${machine}`) !== undefined) return;
+    const lead = `${machine}${FROM}`;
+    this.join(machine, earlier.filter((todo) => todo.id.startsWith(lead)).slice(0, MOST_TODOS).map((todo) => ({ own: todo.id.slice(lead.length), todo })));
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -173,6 +191,7 @@ export class CentralHub {
     if (request.method === "POST" && path === "/_/admit" && machine) return this.admit(machine, request);
     if (request.method === "POST" && path === "/_/spend") return this.spend(await request.json(), now);
     if (request.method === "POST" && path === "/_/marks") return this.mark((await request.json()) as MarkChange, now);
+    if (request.method === "POST" && path === "/_/todos") return this.changeTodos((await request.json()) as TodoChange, now);
     if (path === "/api/events") return this.listen();
     if (path.startsWith("/files/")) {
       // A copy the browser keeps is used only after it asks: the Worker answers that only to a session.
@@ -211,18 +230,14 @@ export class CentralHub {
     return new Stores(NOTHING, others);
   }
 
-  /**
-   * The hub's state: every machine's, with each one's todos, and its marks with the orders it has not taken laid
-   * over them. Marks can be changed from here, and todos can't.
-   */
+  /** The hub's state: every machine's, with its marks with the orders it has not taken laid over them, and the user's todos. */
   private state(now: number): HubState {
     const machines = [...this.load()];
     const marks = machines.map(([machine, shown]) => withOrders(shown.held.marks, this.orders(machine).orders));
     return {
       ...this.stores(now).state(),
       marks: { viewed: marks.flatMap((m) => m.viewed), dismissed: marks.flatMap((m) => m.dismissed) },
-      todos: machines.flatMap(([, shown]) => shown.held.todos).sort((a, b) => (a.addedAt < b.addedAt ? 1 : a.addedAt > b.addedAt ? -1 : 0)),
-      todosReadOnly: true,
+      todos: this.todos(),
       signedIn: true,
     };
   }
@@ -325,8 +340,10 @@ export class CentralHub {
     };
     const before = mayTake();
 
-    const peer: Peer = { id: machine, label: sent.label, host: null };
-    const held = await adoptHeld(peer, sent);
+    const from: Machine = { id: machine, label: sent.label };
+    const held = await adoptHeld(from, sent);
+    const todos = readOrNull(listOf(readTodo), sent.state.todos);
+    if (todos === null) throw new Refused(400, "The todos are not ones this hub can read.");
     const works = new Set(sent.state.store.works.map((work) => work.id as string));
     if (works.size !== Object.keys(sent.pages).length || ![...works].every((work) => Object.hasOwn(sent.pages, work))) throw new Refused(400, "The pages named are not the works the state lists.");
     if (!sent.files.every((file) => works.has(file.path.slice(0, file.path.indexOf("/"))))) throw new Refused(400, "A file named is not in one of the machine's works.");
@@ -336,7 +353,7 @@ export class CentralHub {
     for (const [work, json] of Object.entries(sent.bodies ?? {})) {
       if ((await sha256Hex(json)) !== sent.pages[work]) throw new Refused(400, `The page of ${work} is not the one its hash names.`);
       const page: unknown = JSON.parse(json);
-      const detail = await readDetail(peer, page);
+      const detail = await readDetail(from, page);
       if (detail === null || (page as WorkDetail).summary.id !== work) throw new Refused(400, `The page of ${work} is not one this hub can read.`);
       const row = JSON.stringify(detail);
       if (byteSize(row) > MOST_ROW_BYTES) throw new Refused(413, `The page of ${work} is larger than this hub keeps.`);
@@ -357,7 +374,7 @@ export class CentralHub {
       return reply(200, { missing: { pages: lackingPages, files: lackingFiles } });
     }
 
-    this.ctx.storage.transactionSync(() => {
+    const taken = this.ctx.storage.transactionSync(() => {
       const current = mayTake();
       if ([...works].some((work) => !bodies.has(work) && current?.pages[work] !== sent.pages[work])) throw new Refused(409, "Its pages changed while this send was read. Send again.");
       for (const [work, page] of bodies) this.kv.put(`page:${machine}:${work}`, page);
@@ -370,12 +387,13 @@ export class CentralHub {
       const left = orders.orders.filter((order) => order.n > (sent.applied ?? 0));
       if (left.length < orders.orders.length) this.kv.put(`orders:${machine}`, JSON.stringify({ last: orders.last, orders: left } satisfies Orders));
       this.above(machine, sent.applied ?? 0, now);
+      return this.takeTodos(machine, todos, works);
     });
     this.load().set(machine, next);
     this.heard.set(machine, now);
     this.changed();
     this.wake(now);
-    return reply(200, this.handOver(machine, sent.applied ?? 0));
+    return reply(200, { ...this.handOver(machine, sent.applied ?? 0), ...(taken.length > 0 ? { todos: taken } : {}) });
   }
 
   /** The digests the bucket lacks under this machine. Each is asked about once, or, for many, the machine's folder is listed. */
@@ -490,6 +508,54 @@ export class CentralHub {
     return new Response(null, { status: 204 });
   }
 
+  // ---------------------------------------------------------------- The user's todos
+
+  private todos(): readonly Todo[] {
+    return parse<Todo[]>(this.kv.get("todos")) ?? [];
+  }
+
+  /**
+   * Takes into the user's list each todo of the machine's it has not taken before, and gives the ids of the ones it
+   * holds from it now, as the machine names them. Only the ids it still sends are remembered, so a todo the user
+   * removed here never comes back because its machine sent it again. A todo past a limit is not taken, and stays
+   * on the machine. Run inside the step that shows the machine's state.
+   */
+  private takeTodos(machine: string, sent: readonly Todo[], works: ReadonlySet<string>): string[] {
+    return this.join(machine, sent.slice(0, MOST_TODOS).map((todo) => ({ own: todo.id, todo: adoptTodo(machine, todo, works) })));
+  }
+
+  /** Puts a machine's todos, already made this hub's own, into the user's list: each under the id the machine has for it. */
+  private join(machine: string, todos: readonly { readonly own: string; readonly todo: Todo }[]): string[] {
+    const before = new Set(parse<string[]>(this.kv.get(`taken:${machine}`)) ?? []);
+    const list = this.todos();
+    let next = list;
+    const taken: string[] = [];
+    for (const { own, todo } of todos) {
+      if (!before.has(own)) {
+        if (next.length >= MOST_TODOS || !fits(todo)) continue;
+        next = applyTodoChange(next, { op: "restore", todo }, new Date());
+      }
+      taken.push(own);
+    }
+    if (next !== list) this.kv.put("todos", JSON.stringify(next));
+    if (taken.length > 0) this.kv.put(`taken:${machine}`, JSON.stringify(taken));
+    else if (before.size > 0) this.kv.delete(`taken:${machine}`);
+    return taken;
+  }
+
+  /** A change to the todos a signed-in browser asked for, made as a machine's own hub makes it, within the hub's limits. */
+  private changeTodos(change: TodoChange, now: number): Response {
+    const list = this.todos();
+    const next = applyTodoChange(list, change, new Date(now));
+    if (next === list) return new Response(null, { status: 204 });
+    if (next.length > MOST_TODOS) return new Response(`The hub keeps at most ${MOST_TODOS} todos. Remove some first.`, { status: 409 });
+    // What the change wrote is the one todo that was not in the list as it is now.
+    if (next.some((todo) => !list.includes(todo) && !fits(todo))) return new Response("That todo is longer than this hub keeps. Shorten it, or put the rest in a page.", { status: 413 });
+    this.kv.put("todos", JSON.stringify(next));
+    this.changed();
+    return new Response(null, { status: 204 });
+  }
+
   // ---------------------------------------------------------------- The deployer's orders
 
   private forgotten(machine: string): boolean {
@@ -510,10 +576,11 @@ export class CentralHub {
   /**
    * Removes a machine: everything kept for it goes in one step, and its credential is refused from then on, so a
    * send or an upload already on its way brings nothing back. Then its files go from the bucket, a page at a time.
+   * The todos taken from it stay: they are the user's.
    */
   private async forget(machine: string): Promise<Response> {
     this.ctx.storage.transactionSync(() => {
-      for (const key of [`shown:${machine}`, `heard:${machine}`, `pending:${machine}`, `stored:${machine}`, `orders:${machine}`, ...[...this.kv.list({ prefix: `page:${machine}:` })].map(([key]) => key)]) this.kv.delete(key);
+      for (const key of [`shown:${machine}`, `heard:${machine}`, `pending:${machine}`, `stored:${machine}`, `orders:${machine}`, `taken:${machine}`, ...[...this.kv.list({ prefix: `page:${machine}:` })].map(([key]) => key)]) this.kv.delete(key);
       this.kv.put(`forgotten:${machine}`, String(Date.now()));
     });
     this.load().delete(machine);
@@ -577,18 +644,21 @@ const byteSize = (text: string) => new TextEncoder().encode(text).byteLength;
 const etag = (kept: Kept) => `"${kept.digest}"`;
 
 /** The machine's state, checked as deep as the app reads it and made this hub's own. Throws `Refused` when it can't be read. */
-async function adoptHeld(peer: Peer, sent: StateSend): Promise<Held> {
-  const store = await readState(peer, sent.state.store).catch(() => {
+async function adoptHeld(from: Machine, sent: StateSend): Promise<Held> {
+  const store = await readState(from, sent.state.store).catch(() => {
     throw new Refused(400, "The state is not one this hub can read.");
   });
-  const media = await readMedia(peer, sent.state.media);
+  const media = await readMedia(from, sent.state.media);
   const marks = readOrNull(readMarks, sent.state.marks);
-  const todos = readOrNull(listOf(readTodo), sent.state.todos);
-  if (media === null || marks === null || todos === null) throw new Refused(400, "The media, the marks or the todos are not ones this hub can read.");
+  if (media === null || marks === null) throw new Refused(400, "The media or the marks are not ones this hub can read.");
   const works = new Set(sent.state.store.works.map((work) => work.id as string));
-  return { store, media, marks: adoptMarks(peer.id, marks, works), todos: todos.map((todo) => adoptTodo(peer.id, todo, works)) };
+  return { store, media, marks: adoptMarks(from.id, marks, works) };
 }
 
+/** Whether the hub keeps a todo this long. */
+const fits = (todo: Todo) => byteSize(JSON.stringify(todo)) <= MOST_TODO_BYTES;
+
+/** A machine's todo in the user's list: its id and its work's are made that machine's, and a work it does not send is no link. */
 function adoptTodo(machine: string, todo: Todo, works: ReadonlySet<string>): Todo {
   return { ...todo, id: `${machine}${FROM}${todo.id}`, work: todo.work !== null && works.has(todo.work as string) ? (`${machine}${FROM}${todo.work}` as WorkId) : null };
 }

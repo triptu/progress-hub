@@ -1,5 +1,6 @@
 import { flag, listOf, matching, oneOf, orNull, readOrNull, shape, tableOf, text, unread } from "../core/reader.ts";
-import type { Instant, MarkKind, Marks, Media, Todo, WorkId } from "../core/types.ts";
+import type { Instant, MarkKind, Marks, Media, Todo, TodoChange, WorkId } from "../core/types.ts";
+import { readTodoChange } from "../core/todos.ts";
 import type { StoreState } from "../stores/store.ts";
 
 /**
@@ -96,6 +97,18 @@ export const MOST_MARK_KEY_CHARS = 2048;
  */
 export const MOST_ORDERS = 1000;
 
+/*
+ * The user's todos, which the central hub keeps: changed by a signed-in browser, and joined by the todos a machine
+ * sends with its state. A machine's todo past these limits is not taken, and stays on that machine.
+ */
+
+/** A request to change todos, as it arrives. Read no further than this. */
+export const MOST_TODOS_BYTES = 64 * 1024;
+/** Todos the hub keeps, done ones included. Past this a new one is refused. */
+export const MOST_TODOS = 1000;
+/** One todo as the hub keeps it, in bytes of JSON. `MOST_TODOS` of them fit one row. */
+export const MOST_TODO_BYTES = 4 * 1024;
+
 /** A stream as text when it is at most `most` bytes, read no further than that. Null for a larger one. */
 export async function readCapped(stream: ReadableStream<Uint8Array>, most: number): Promise<string | null> {
   const reader = stream.getReader();
@@ -184,6 +197,12 @@ export interface Answer {
   readonly format: typeof FORMAT;
   readonly missing?: { readonly pages: readonly string[]; readonly files: readonly string[] };
   readonly marks?: readonly MarkOrder[];
+  /**
+   * The ids of the machine's todos the hub has taken into the user's list, as the machine names them, in the answer
+   * to a state that was shown. The machine removes them from its own file. An earlier build of a machine ignores
+   * them and keeps sending them, and the hub takes each only once.
+   */
+  readonly todos?: readonly string[];
   readonly error?: string;
 }
 
@@ -204,6 +223,14 @@ export function readMarkChange(value: unknown): MarkChange | string {
   if (!change.keys.every((key) => key.length > 0 && key.length <= MOST_MARK_KEY_CHARS)) return `A key is 1 to ${MOST_MARK_KEY_CHARS} characters.`;
   return change;
 }
+
+/** A change to todos from a browser, or why it can't be taken. Whether the list has room for it is the hub's to check. */
+export function readCentralTodoChange(value: unknown): TodoChange | string {
+  return readTodoChange(value) ?? "A change to todos is an add, an edit, a done, a remove or a restore, with what each needs.";
+}
+
+/** The todo ids in a hub's answer, as a machine reads them. */
+export const readTakenTodos = listOf(text);
 
 /** The orders in a hub's answer, as a machine reads them. */
 export const readOrders = listOf(shape<MarkOrder>({ n: (value) => (Number.isSafeInteger(value) && (value as number) > 0 ? (value as number) : unread()), kind: MARK_KIND, key: text, on: flag }));
@@ -258,4 +285,7 @@ const fileRef = shape<FileRef>({
 
 export const readMarks = shape<Marks>({ viewed: listOf(text), dismissed: listOf(text) });
 
-export const readTodo = shape<Todo>({ id: text, text, description: text, work: orNull(text<WorkId>), project: orNull(text), addedAt: text<Instant>, doneAt: orNull(text<Instant>) });
+/** A time a todo carries. The list is ordered by it, so it must be one. */
+const when = (value: unknown): Instant => (typeof value === "string" && !Number.isNaN(Date.parse(value)) ? (value as Instant) : unread());
+
+export const readTodo = shape<Todo>({ id: text, text, description: text, work: orNull(text<WorkId>), project: orNull(text), addedAt: when, doneAt: orNull(when) });

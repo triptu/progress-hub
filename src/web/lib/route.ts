@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { MouseEvent } from "react";
+import { workNames, type WorkNames } from "../../core/names.ts";
 import type { WorkId } from "../../core/types.ts";
 
 /** The id of the todos on a Home screen, which is where a link to them scrolls. */
@@ -25,6 +26,9 @@ interface Route {
 
 const isTab = (value: string): value is Tab => TABS.some((tab) => tab === value);
 
+/** The name each work the hub shows has in an address. Empty until the hub's state is in, when a name is taken as an id. */
+let names: WorkNames = workNames([]);
+
 /** The id of a lane of the board, which is where a link to it scrolls. */
 export const laneAnchor = (lane: string) => `lane-${lane}`;
 
@@ -43,7 +47,7 @@ export function parseRoute(url: URL): Route {
   const tab = (inWork ? parts[2] : parts[0]) ?? "main";
   const moved = MOVED[tab];
   return {
-    work: inWork ? (decodeURIComponent(parts[1] ?? "") as WorkId) : null,
+    work: inWork ? named(decodeURIComponent(parts[1] ?? "")) : null,
     tab: isTab(tab) ? tab : (moved?.tab ?? "main"),
     focus: url.hash ? decodeURIComponent(url.hash.slice(1)) : (moved?.focus ?? null),
     open: url.searchParams.get("open"),
@@ -51,8 +55,11 @@ export function parseRoute(url: URL): Route {
   };
 }
 
+/** The work a name in an address stands for. An id is taken as it is, so an address of an earlier build still opens. */
+const named = (name: string): WorkId => names.idOf.get(name) ?? (name as WorkId);
+
 export function routeHref(route: { readonly work: WorkId | null; readonly tab?: Tab; readonly focus?: string | null; readonly open?: string | null; readonly card?: string | null }): string {
-  const base = route.work === null ? "" : `/w/${encodeURIComponent(route.work)}`;
+  const base = route.work === null ? "" : `/w/${encodeURIComponent(names.nameOf.get(route.work) ?? route.work)}`;
   const tab = route.tab && route.tab !== "main" ? `/${route.tab}` : "";
   const shown = [route.card ? `card=${encodeURIComponent(route.card)}` : "", route.open ? `open=${encodeURIComponent(route.open)}` : ""].filter(Boolean).join("&");
   const focus = route.focus ? `#${encodeURIComponent(route.focus)}` : "";
@@ -67,6 +74,21 @@ if (location.pathname.split("/").some((part) => part in MOVED)) history.replaceS
 function sync() {
   current = parseRoute(new URL(location.href));
   for (const listener of listeners) listener();
+}
+
+/**
+ * Tells the addresses which works the hub shows. The address on screen is read again, since a name in it may now
+ * stand for a work, and an address that carries an id is rewritten as the work's name.
+ */
+export function nameWorks(ids: readonly WorkId[]): void {
+  names = workNames(ids);
+  const next = parseRoute(new URL(location.href));
+  const shown = decodeURIComponent(location.pathname.split("/").filter(Boolean)[1] ?? "");
+  if (next.work !== null && shown !== (names.nameOf.get(next.work) ?? next.work)) history.replaceState(history.state, "", routeHref(next));
+  if (next.work !== current.work) {
+    current = next;
+    for (const listener of listeners) listener();
+  }
 }
 
 /**

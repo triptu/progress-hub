@@ -20,8 +20,6 @@ export interface AgentSource {
   read(sessions: readonly string[]): SourceRead;
   /** Where the user opens a session to read it and answer it. Null when the harness has no such link. */
   link(session: string): string | null;
-  /** The user's other machines this harness is linked to, when it links machines. */
-  machines?(): readonly Machine[];
 }
 
 /** One read of a harness. Every part may be empty: a harness says what it knows, and the hub shows no more than that. */
@@ -44,13 +42,6 @@ export interface StalledAgent {
   readonly root: SessionRef;
   readonly agentTitle: string;
   readonly stall: Stall;
-}
-
-/** Another of the user's machines, as a harness knows it. */
-export interface Machine {
-  readonly label: string;
-  /** The machine's name on the network, such as its tailnet name. */
-  readonly host: string;
 }
 
 export class SourceError extends Error {}

@@ -35,6 +35,16 @@ test("new twice gives one page and never overwrites it", () => {
   expect(readdirSync(join(home, "search-speed"))).toEqual(["progress.md"]);
 });
 
+test("on a machine linked to a central hub, new prints the page's address there, which opens on any device", () => {
+  const { dir, home, env } = setup();
+  const link = join(dir, "central");
+  writeFileSync(link, JSON.stringify({ url: "https://hub.example/", credential: `pm_box-1.${"a".repeat(43)}` }));
+  expect(progress(["new", "Search speed"], { ...env, PROGRESS_CENTRAL: link }).out).toBe(`${join(home, "search-speed", "progress.md")}\nhttps://hub.example/w/search-speed\n`);
+  // A link that can't be read is no link: the page's address is this machine's.
+  writeFileSync(link, "not a link");
+  expect(progress(["new", "Search speed"], { ...env, PROGRESS_CENTRAL: link }).out).toContain("http://127.0.0.1:4747/w/search-speed");
+});
+
 test("new from a thread is keyed on the thread, and join and path find it", () => {
   const { home, env } = setup();
   const thread = { ...env, T3CODE_THREAD_ID: "thread-a" };

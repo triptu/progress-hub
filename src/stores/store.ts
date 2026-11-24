@@ -1,8 +1,9 @@
 import type { Health, HubState, Media, WorkDetail, WorkId } from "../core/types.ts";
+import { FROM, workNames } from "../core/names.ts";
 
 /**
  * A place works are kept and read from. This machine's progress home on disk is one, and the default.
- * Another machine's hub is one. The hub shows every store's works as one list.
+ * On the central hub, each machine that sends to it is one. A hub shows every store's works as one list.
  *
  * A store answers with finished state: pages already rendered, with what needs the user, the plan and
  * the feed worked out. So a store is something that can do that work or be handed it, such as a hub.
@@ -10,7 +11,7 @@ import type { Health, HubState, Media, WorkDetail, WorkId } from "../core/types.
 export interface WorkStore {
   /** Goes up whenever what the store would answer changes. */
   readonly version: number;
-  /** Looks for what changed. Called every couple of seconds, so a store that asks over a network paces itself. */
+  /** Looks for what changed. Called every couple of seconds. */
   refresh(now?: Date): void;
   /** What the store holds now. Null while it has never been read, so nothing is said about it yet. */
   state(): StoreState | null;
@@ -25,7 +26,7 @@ export interface WorkStore {
   file(path: string): Promise<Response>;
 }
 
-/** A store beside this machine's own. Its works carry its id, and the user is told when it stops answering. */
+/** A machine's store on the central hub. Its works carry its id, and the user is told when it goes quiet. */
 export interface OtherStore extends WorkStore {
   /** Short and safe in an address. It leads the id of every work from that store, as `<id>~<work>`, which is how a work's page and its files find their store. */
   readonly id: string;
@@ -39,15 +40,14 @@ export interface StoreState extends Pick<HubState, "works" | "needs" | "plan" | 
 
 export const FEED_LIMIT = 300;
 
-/** Parts a work's id from the store it came from, in `<store>~<work>`. Not a character a folder name is given. */
-export const FROM = "~";
+export { FROM };
 
 
 const newestFirst = <T extends { readonly at: string }>(rows: readonly T[]) => [...rows].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
 
-/** Every store as one: this machine's own, and the others beside it. This is all the server knows about where works are kept. */
+/** Every store as one: a hub's own, and the machines' on the central hub. This is all a server knows about where works are kept. */
 export class Stores {
-  readonly own: WorkStore;
+  private readonly own: WorkStore;
   private readonly others: readonly OtherStore[];
 
   constructor(own: WorkStore, others: readonly OtherStore[] = []) {
@@ -93,6 +93,14 @@ export class Stores {
 
   detail(work: WorkId): WorkDetail | null | Promise<WorkDetail | null> {
     return this.of(work).detail(work);
+  }
+
+  /** The work an address names: by its id, or by the name it has in an address, which leaves its machine out. */
+  async named(name: string): Promise<WorkDetail | null> {
+    const direct = await this.detail(name as WorkId);
+    if (direct) return direct;
+    const id = workNames(this.state().works.map((work) => work.id)).idOf.get(name);
+    return id === undefined ? null : this.detail(id);
   }
 
   async media(): Promise<Media[]> {

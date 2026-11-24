@@ -59,7 +59,7 @@ writeFileSync(join(home, ".todos.json"), JSON.stringify(todos, null, 1));
 
 const hub = Bun.spawn(["bun", join(import.meta.dir, "..", "src", "main.ts"), "serve"], {
   // It sends the samples to a central hub only when $PROGRESS_CENTRAL names a link, never through this machine's own.
-  env: { ...process.env, PROGRESS_HOME: home, PROGRESS_T3_DB: "off", PROGRESS_PEERS: "", PROGRESS_PORT: process.env.PROGRESS_PORT ?? "4748", PROGRESS_CENTRAL: process.env.PROGRESS_CENTRAL ?? join(home, ".central") },
+  env: { ...process.env, PROGRESS_HOME: home, PROGRESS_T3_DB: "off", PROGRESS_PORT: process.env.PROGRESS_PORT ?? "4748", PROGRESS_CENTRAL: process.env.PROGRESS_CENTRAL ?? join(home, ".central") },
   stdio: ["inherit", "inherit", "inherit"],
 });
 for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => hub.kill());

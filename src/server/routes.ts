@@ -14,17 +14,15 @@ export interface Readable {
 export async function read(req: Request, hub: Readable): Promise<Response | null> {
   const url = new URL(req.url);
   const path = url.pathname;
-  // `own` is this machine's store alone, which is what another hub asks for, so two hubs that read each other never loop.
-  const own = url.searchParams.has("own");
-  if (path === "/api/state") return Response.json(own ? hub.stores.own.state() : hub.state());
-  if (path === "/api/media") return Response.json(await (own ? hub.stores.own.media() : hub.stores.media()));
+  if (path === "/api/state") return Response.json(hub.state());
+  if (path === "/api/media") return Response.json(await hub.stores.media());
   // A file a work shows. An address with the file's time on it names one version, which the browser may keep.
   if (path.startsWith("/files/")) return hub.stores.file(path.slice("/files/".length), url.searchParams.has("v"));
   const work = /^\/api\/work\/([^/]+)$/.exec(path)?.[1];
   if (work !== undefined) {
-    const id = decoded(work) as WorkId;
-    const detail = await hub.stores.detail(id);
-    return detail ? Response.json(detail) : Response.json({ error: `No work called ${id}.` }, { status: 404 });
+    const name = decoded(work);
+    const detail = await hub.stores.named(name);
+    return detail ? Response.json(detail) : Response.json({ error: `No work called ${name}.` }, { status: 404 });
   }
   return null;
 }

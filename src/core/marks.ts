@@ -27,8 +27,7 @@ const SEPARATOR: Record<MarkKind, string> = { viewed: "/", dismissed: ":" };
 /**
  * A machine's marks as a hub that holds several machines keeps them. Every key gets `<machine>~` in front, the way
  * that machine's work ids and stalled threads do, so a mark counts only for the machine that sent it: one machine's
- * marks never hide another's. A mark on any other work, such as a peer's that the machine's hub shows, is that
- * peer's to send, so it is left out. A new kind of key is added in `ownsMark` and in `ownMark`.
+ * marks never hide another's. A mark on any other work is not that machine's to send, so it is left out. A new kind of key is added in `ownsMark` and in `ownMark`.
  */
 export function adoptMarks(machine: string, marks: Marks, works: ReadonlySet<string>): Marks {
   const adopt = (kind: MarkKind) => (key: string) => {

@@ -313,7 +313,7 @@ export interface HubState {
   readonly latestMedia: Media | null;
   /** The progress home, its pages and their .history.jsonl files. */
   readonly home: Health;
-  /** The stores beside this machine's own that have been read, such as another machine's hub, and whether each answers. */
+  /** The stores beside the hub's own: on the central hub, each machine that sends to it, and whether it has been heard from lately. */
   readonly stores: readonly { readonly id: string; readonly label: string; readonly health: Health }[];
   /** Each harness the hub reads agents from, and whether it can be read. */
   readonly sources: readonly { readonly id: string; readonly label: string; readonly health: Health }[];
@@ -322,8 +322,6 @@ export interface HubState {
   readonly marks: Marks;
   /** The user's own list, newest first. */
   readonly todos: readonly Todo[];
-  /** True when this hub takes no change to the todos, so the app offers no control for one. A central hub takes marks, as orders for the machines, and not todos. */
-  readonly todosReadOnly?: boolean;
   /** True when this hub is behind a sign-in: the app offers a way to sign out, and keeps none of its answers in the tab's storage. */
   readonly signedIn?: boolean;
 }

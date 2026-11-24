@@ -463,7 +463,7 @@ export function App() {
   }
 }
 
-/** A mark the hub didn't save is said over the screen's foot for a few seconds, since the click was undone. It takes no room. */
+/** A mark or a todo the hub didn't save is said over the screen's foot for a few seconds, since the change was undone. It takes no room. */
 function Unsaved() {
   const unsaved = useUnsavedMark();
   return (

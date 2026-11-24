@@ -1,13 +1,13 @@
 import { CentralHub, fileKey, MACHINE_HEADER, NOT_LINKED, type Bucket, type HubContext } from "./hub.ts";
 import { allowed, checkIdToken, checkNonce, checkOrder, googleKey, googleOwns, makeNonce, makeSession, NO_SESSION, readCredential, readSession, sessionCookie, sha256Hex } from "./login.ts";
-import { DIGEST, MACHINE_ID, MACHINES_PATH, MOST_MARKS_BYTES, MOST_SEND_ZIPPED, readCapped, readMarkChange, SEND_PATH, UPLOAD_PATH } from "./protocol.ts";
+import { DIGEST, MACHINE_ID, MACHINES_PATH, MOST_MARKS_BYTES, MOST_SEND_ZIPPED, MOST_TODOS_BYTES, readCapped, readCentralTodoChange, readMarkChange, SEND_PATH, UPLOAD_PATH } from "./protocol.ts";
 
 /**
  * The central hub's Worker. Every route needs a session but the sign-in itself, and the machine routes need a
  * machine's credential instead, and the deployer's routes an order signed with the machine key. Without a session a browser gets the sign-in page and nothing else, and an API or
- * a file gets 401. Signed in, the app is served from the build, and the reads go to the one Durable Object. The one
- * write a session may make is a change to marks, from the hub's own page, which the Durable Object keeps as an order
- * for the machine whose works it is about.
+ * a file gets 401. Signed in, the app is served from the build, and the reads go to the one Durable Object. The two
+ * writes a session may make, from the hub's own page, are a change to marks, which the Durable Object keeps as an
+ * order for the machine whose works it is about, and a change to the user's todos, which it keeps itself.
  * No answer is kept by a cache: a browser may keep a file only to ask again with it.
  */
 export interface Env {
@@ -85,8 +85,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
 
   if (path.startsWith("/api/") || path.startsWith("/files/")) {
-    if (path === "/api/marks" && request.method === "POST") return changeMarks(request, env);
-    if (request.method !== "GET" && request.method !== "HEAD") return text("This hub takes no change but to the marks.", 405);
+    if (path === "/api/marks" && request.method === "POST") return change(request, env, "marks");
+    if (path === "/api/todos" && request.method === "POST") return change(request, env, "todos");
+    if (request.method !== "GET" && request.method !== "HEAD") return text("This hub takes no change but to the marks and the todos.", 405);
     if (path === "/api/events") return events(env);
     const headers = new Headers(request.headers);
     headers.delete(MACHINE_HEADER);
@@ -110,20 +111,26 @@ async function route(request: Request, env: Env): Promise<Response> {
  */
 const fromOwnOrigin = (request: Request) => request.headers.get("origin") === new URL(request.url).origin;
 
-/** A change to marks from the hub's own page, read whole before the Durable Object is asked anything. */
-async function changeMarks(request: Request, env: Env): Promise<Response> {
+const CHANGES = {
+  marks: { most: MOST_MARKS_BYTES, read: readMarkChange },
+  todos: { most: MOST_TODOS_BYTES, read: readCentralTodoChange },
+} as const;
+
+/** A change to marks or todos from the hub's own page, read whole before the Durable Object is asked anything. */
+async function change(request: Request, env: Env, what: keyof typeof CHANGES): Promise<Response> {
   if (!fromOwnOrigin(request)) return text("Forbidden", 403);
-  const raw = request.body ? await readCapped(request.body, MOST_MARKS_BYTES) : "";
-  if (raw === null) return text(`A change to marks is at most ${MOST_MARKS_BYTES} bytes.`, 413);
+  const { most, read } = CHANGES[what];
+  const raw = request.body ? await readCapped(request.body, most) : "";
+  if (raw === null) return text(`A change to ${what} is at most ${most} bytes.`, 413);
   let body: unknown = null;
   try {
     body = JSON.parse(raw);
   } catch {
     // Read as nothing, which is refused below.
   }
-  const change = readMarkChange(body);
+  const change = read(body);
   if (typeof change === "string") return text(change, 400);
-  return hubOf(env).fetch(new Request("https://hub/_/marks", { method: "POST", body: JSON.stringify(change) }));
+  return hubOf(env).fetch(new Request(`https://hub/_/${what}`, { method: "POST", body: JSON.stringify(change) }));
 }
 
 // ---------------------------------------------------------------- Machines

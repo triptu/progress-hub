@@ -1,10 +1,9 @@
-import { ArrowCounterClockwiseIcon, CaretDownIcon, CaretRightIcon, CheckCircleIcon, CheckIcon, CircleIcon, DotOutlineIcon, LinkSimpleIcon, PencilSimpleIcon, PlusIcon, TextAlignLeftIcon, TrashIcon, XIcon } from "@phosphor-icons/react";
+import { ArrowCounterClockwiseIcon, CaretDownIcon, CaretRightIcon, CheckCircleIcon, CheckIcon, CircleIcon, LinkSimpleIcon, PencilSimpleIcon, PlusIcon, TextAlignLeftIcon, TrashIcon, XIcon } from "@phosphor-icons/react";
 import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { FocusEvent, KeyboardEvent, MouseEvent } from "react";
 import type { Todo, TodoChange, WorkId, WorkSummary } from "../../core/types.ts";
 import { routeHref, TODOS_ANCHOR } from "../lib/route.ts";
-import { useTodosWritable } from "../lib/store.ts";
 import { changeTodos, linkOf } from "../lib/todos.ts";
 import { exact } from "../lib/time.ts";
 import { Avatar, Link } from "./parts.tsx";
@@ -30,13 +29,10 @@ export function Todos(props: TodosProps) {
   const done = props.todos.filter((todo) => todo.doneAt !== null).sort((a, b) => ((a.doneAt ?? "") < (b.doneAt ?? "") ? 1 : -1));
   // The todo last deleted, until something else is done to the list: it can be put back as it was.
   const [gone, setGone] = useState<Todo | null>(null);
-  // A hub that takes no change to todos, such as a central one, lists them with nothing to add, tick, edit or remove them with.
-  const change: Change | null = useTodosWritable()
-    ? (asked) => {
-        setGone(asked.op === "remove" ? (props.todos.find((todo) => todo.id === asked.id) ?? null) : null);
-        return changeTodos(asked);
-      }
-    : null;
+  const change: Change = (asked) => {
+    setGone(asked.op === "remove" ? (props.todos.find((todo) => todo.id === asked.id) ?? null) : null);
+    return changeTodos(asked);
+  };
   const row = (todo: Todo) => <Row key={todo.id} todo={todo} works={props.works} scoped={props.scope !== null} change={change} />;
   const query = props.query.trim();
   return (
@@ -45,8 +41,8 @@ export function Todos(props: TodosProps) {
         Todos
         {open.length ? <span className="n">{open.length}</span> : null}
       </h2>
-      {change ? <Add key={props.scope ?? ""} works={props.works} scope={props.scope} change={change} /> : null}
-      {gone && change ? (
+      <Add key={props.scope ?? ""} works={props.works} scope={props.scope} change={change} />
+      {gone ? (
         <p className={s.gone} role="status">
           <span>Deleted “{gone.text}”.</span>
           <button type="button" className="btn" onClick={() => void change({ op: "restore", todo: gone })}>
@@ -532,7 +528,7 @@ function Linked(props: { readonly text: string }) {
   );
 }
 
-function Row(props: { readonly todo: Todo; readonly works: readonly WorkSummary[]; readonly scoped: boolean; readonly change: Change | null }) {
+function Row(props: { readonly todo: Todo; readonly works: readonly WorkSummary[]; readonly scoped: boolean; readonly change: Change }) {
   const { todo, change } = props;
   const [editing, setEditing] = useState(false);
   const row = useRef<HTMLLIElement>(null);
@@ -541,16 +537,10 @@ function Row(props: { readonly todo: Todo; readonly works: readonly WorkSummary[
   const face = <Avatar project={project} fallback={work?.id ?? project ?? ""} size="xs" />;
   return (
     <li ref={row} className={`${s.todo}${done ? ` ${s.done}` : ""}`}>
-      {change ? (
-        <button type="button" className={s.todoCheck} aria-pressed={done} aria-label="Done" title={done ? "Done. Click to put it back on the list." : "Mark as done"} onClick={(event) => leave(event, () => void change({ op: "done", id: todo.id, on: !done }))}>
-          {done ? <CheckCircleIcon weight="fill" aria-hidden /> : <CircleIcon aria-hidden />}
-        </button>
-      ) : (
-        <span className={s.todoCheck} role="img" aria-label={done ? "Done" : "To do"}>
-          {done ? <CheckCircleIcon weight="fill" aria-hidden /> : <DotOutlineIcon weight="fill" aria-hidden />}
-        </span>
-      )}
-      {editing && change ? (
+      <button type="button" className={s.todoCheck} aria-pressed={done} aria-label="Done" title={done ? "Done. Click to put it back on the list." : "Mark as done"} onClick={(event) => leave(event, () => void change({ op: "done", id: todo.id, on: !done }))}>
+        {done ? <CheckCircleIcon weight="fill" aria-hidden /> : <CircleIcon aria-hidden />}
+      </button>
+      {editing ? (
         <Fields
           start={{ text: todo.text, description: todo.description, about: aboutOf(todo) }}
           editing
@@ -565,7 +555,7 @@ function Row(props: { readonly todo: Todo; readonly works: readonly WorkSummary[
       ) : (
         <>
           {/* A click on the words edits them, as in any list of this kind. A link in them still opens, and words can still be selected to copy. */}
-          <div className={done || !change ? undefined : s.todoOpen} onClick={(event) => (done || !change || (event.target as HTMLElement).closest("a") || !window.getSelection()?.isCollapsed ? undefined : setEditing(true))}>
+          <div className={done ? undefined : s.todoOpen} onClick={(event) => (done || (event.target as HTMLElement).closest("a") || !window.getSelection()?.isCollapsed ? undefined : setEditing(true))}>
             <p className={`prose-inline ${s.todoText}`} title={done && todo.doneAt ? `Done ${exact(todo.doneAt)}` : `Added ${exact(todo.addedAt)}`}>
               <Linked text={todo.text} />
             </p>
@@ -587,7 +577,7 @@ function Row(props: { readonly todo: Todo; readonly works: readonly WorkSummary[
               </span>
             ) : null}
           </div>
-          {!change ? null : done ? (
+          {done ? (
             <button type="button" className={`icon-btn ${s.todoRemove}`} aria-label="Remove" title="Remove from the list for good" onClick={(event) => leave(event, () => void change({ op: "remove", id: todo.id }))}>
               <XIcon aria-hidden />
             </button>

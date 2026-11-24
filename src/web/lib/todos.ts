@@ -1,15 +1,20 @@
 import type { Todo, TodoChange, WorkId, WorkSummary } from "../../core/types.ts";
+import { saidUnsaved } from "./marks.ts";
 import { matches } from "./needs.ts";
 import { refreshHub } from "./store.ts";
 
 /**
  * Asks the hub, which keeps the list, to change it, and resolves to whether it did.
- * The screen follows once the hub's state says so.
+ * The screen follows once the hub's state says so. A change the hub did not take is said for a few seconds.
  */
 export function changeTodos(change: TodoChange): Promise<boolean> {
   return fetch("/api/todos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(change) })
     .then((response) => (response.ok ? refreshHub().then(() => true) : false))
-    .catch(() => false);
+    .catch(() => false)
+    .then((saved) => {
+      saidUnsaved(!saved);
+      return saved;
+    });
 }
 
 /** What a todo is about, as the list names it: its work while that work has a page, else its project. */

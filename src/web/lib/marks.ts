@@ -10,7 +10,7 @@ import { refreshHub, useHub } from "./store.ts";
 const pending = new Map<string, boolean>();
 const listeners = new Set<() => void>();
 let turn = 0;
-/** The last change didn't reach the hub's file, so the screen went back to what the hub holds. True for a few seconds, which is how long the screen says so. */
+/** The last change, to a mark or a todo, didn't reach the hub, so the screen went back to what the hub holds. True for a few seconds, which is how long the screen says so. */
 let unsaved = false;
 let unsavedTimer: ReturnType<typeof setTimeout> | undefined;
 const SAID_MS = 8000;
@@ -38,17 +38,22 @@ function send(kind: MarkKind, keys: readonly string[], on: boolean): Promise<boo
     .then((saved) => {
       // A later click on the same key has its own request, and this one must not undo it.
       for (const key of keys) if (pending.get(id(kind, key)) === on) pending.delete(id(kind, key));
-      clearTimeout(unsavedTimer);
-      unsaved = !saved;
-      if (unsaved) {
-        unsavedTimer = setTimeout(() => {
-          unsaved = false;
-          emit();
-        }, SAID_MS);
-      }
-      emit();
+      saidUnsaved(!saved);
       return saved;
     });
+}
+
+/** Says, or stops saying, that a change the user made didn't reach the hub. */
+export function saidUnsaved(now: boolean): void {
+  clearTimeout(unsavedTimer);
+  unsaved = now;
+  if (unsaved) {
+    unsavedTimer = setTimeout(() => {
+      unsaved = false;
+      emit();
+    }, SAID_MS);
+  }
+  emit();
 }
 
 const subscribe = (listener: () => void) => {
@@ -56,7 +61,7 @@ const subscribe = (listener: () => void) => {
   return () => listeners.delete(listener);
 };
 
-/** True for a few seconds after a mark the hub didn't save. The screen says so, since the click was undone. */
+/** True for a few seconds after a mark or a todo the hub didn't save. The screen says so, since the change was undone. */
 export const useUnsavedMark = () => useSyncExternalStore(subscribe, () => unsaved);
 
 export interface MarkSet {

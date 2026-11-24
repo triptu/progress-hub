@@ -7,8 +7,9 @@ import { readMarkChange, type MarkOrder } from "../central/protocol.ts";
 import { ownsMark } from "../core/marks.ts";
 import { DiskStore } from "../stores/disk/index.ts";
 import { MarkStore } from "../stores/marks.ts";
-import { Stores, type OtherStore } from "../stores/store.ts";
-import { readTodoChange, TodoStore } from "../stores/todos.ts";
+import { Stores } from "../stores/store.ts";
+import { readTodoChange } from "../core/todos.ts";
+import { TodoStore } from "../stores/todos.ts";
 import app from "../web/index.html";
 
 const POLL_MS = 2000;
@@ -22,9 +23,10 @@ export interface Running {
 
 /**
  * Starts the hub on 127.0.0.1. Asks the stores what changed every 2 s, and tells each open page when anything
- * did, so it fetches what it shows. The works come from the progress home at `home` on this machine's disk,
- * and from `others`. What the user marks and their todos are kept in two files in `home`.
- * Answers only requests addressed to this machine: loopback, or one of `hosts` (its tailnet names), on the hub's port.
+ * did, so it fetches what it shows. The works come from the progress home at `home` on this machine's disk.
+ * What the user marks and their todos are kept in two files in `home`. A linked machine's todos file keeps only
+ * what the central hub has not taken yet.
+ * Answers only requests addressed to this machine: loopback, or one of `hosts` (the other names it is reached by), on the hub's port.
  * Anything else may be another site reaching the hub through DNS rebinding.
  */
 export function serve(options: {
@@ -33,12 +35,11 @@ export function serve(options: {
   sources?: readonly AgentSource[];
   hosts?: readonly string[];
   open?: (path: string) => void;
-  others?: readonly OtherStore[];
   /** A central hub this machine sends its state to, when it is linked to one. */
   central?: Link | null;
 }): Running {
   const own = new DiskStore(options.home, options.sources);
-  const stores = new Stores(own, options.others);
+  const stores = new Stores(own);
   // What the user keeps apart from any work. Like a work's journal, these are the hub's own files in the home.
   // A mark on an item an agent has since reworded is given on the item's id now. Another machine's works are not followed.
   const marks = new MarkStore(join(options.home, ".marks.json"), () => own.formerIds());
@@ -51,7 +52,11 @@ export function serve(options: {
     if (!ownsMark(order.kind, order.key, new Set((own.state()?.works ?? []).map((work) => work.id as string)))) return;
     if (marks.change(order.kind, [order.key], order.on)) userChanges++;
   };
-  const sender = options.central ? new Sender({ link: options.central, own, extras: () => ({ marks: marks.get(), todos: todos.get() }), apply, changes: () => `${own.version}/${userChanges}` }) : null;
+  // A todo the central hub has taken is the user's there, and goes from this machine's file.
+  const release = (ids: readonly string[]) => {
+    if (todos.release(ids)) userChanges++;
+  };
+  const sender = options.central ? new Sender({ link: options.central, own, extras: () => ({ marks: marks.get(), todos: todos.get() }), apply, release, changes: () => `${own.version}/${userChanges}` }) : null;
   const machine = machineLabel();
   const state = (): HubState => ({ ...stores.state(), machine: { label: machine, central: sender?.status() ?? null }, marks: marks.get(), todos: todos.get() });
   const names = new Set(["127.0.0.1", "localhost", ...(options.hosts ?? [])].map((name) => name.toLowerCase()));
@@ -97,7 +102,13 @@ export function serve(options: {
   // showing, and a paint before that is a blank frame. `blocking="render"` says so, and Bun's bundler drops
   // the attribute from the page it builds, so the page is served with it put back.
   let built: Promise<string> | null = null;
-  const page = async (): Promise<Response> => {
+  const page = async (req: Request): Promise<Response> => {
+    // A machine linked to a central hub is read there: that hub opens on every device and shows every machine's
+    // work. A page asked for here is sent on to the same page there while that hub takes this machine's sends.
+    // When it does not, or the address says `?local`, this machine's own page answers.
+    const asked = new URL(req.url);
+    const central = sender?.status();
+    if (central?.health.ok && !asked.searchParams.has("local")) return Response.redirect(`${central.url}${asked.pathname}`, 302);
     built ??= fetch(`http://127.0.0.1:${server.port}/app.html`)
       .then((response) => response.text())
       .catch((error: unknown) => {

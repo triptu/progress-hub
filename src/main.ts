@@ -11,7 +11,6 @@ import type { Page, SectionKind, SessionRef } from "./core/types.ts";
 import { linkFile, linkTo, readLink } from "./central/send.ts";
 import { addItem, type Edit, EditError, type Live, moveItem, removeItem, type Retry, rewordItem, sectionNamed, setLive, setSummary } from "./edit.ts";
 import { MarkStore } from "./stores/marks.ts";
-import { findRemotes, RemoteStore } from "./stores/remote.ts";
 import { agentSources } from "./sources/index.ts";
 import { readFrom, refOf, SourceError, type AgentSource, type SourceRead } from "./sources/source.ts";
 
@@ -26,11 +25,15 @@ const USAGE = `progress: one Markdown progress page per piece of work, and a hub
   progress check [<work>]    what the hub reads from the page, anything to fix on it, and any ask
                              the user marked done in the hub.
   progress todo "<text>"     add to the user's todos in the hub, for something they asked to be
-                             reminded of. Linked to this thread's work when it has a page.
+                             reminded of. Linked to this thread's work when it has a page. On a
+                             machine linked to a central hub, it goes on there with the next send.
   progress format            print the page format, for an agent that has not read it.
   progress link <address>    send this machine's work to a central hub at that address, with a
                              credential made for this machine on standard input, and restart the hub.
   progress serve             start the hub on http://127.0.0.1:4747 ($PROGRESS_PORT changes the port).
+                             On a machine linked to a central hub, a page opened there goes on to
+                             the same page on the central hub while it can be reached. Add ?local
+                             to the address for this machine's own.
                              It answers only to 127.0.0.1, localhost and the names in $PROGRESS_HOSTS
                              (comma separated), for a machine reached by another name.
 
@@ -74,8 +77,7 @@ A hub linked with progress link sends to the central hub named in ~/.config/prog
 or in the file $PROGRESS_CENTRAL names.
 T3's database is read from ~/.t3/userdata/statev2.sqlite, or $PROGRESS_T3_DB; set it to
 "off" to read no T3 data.
-The hub also shows the work of your other machines' hubs: the machines T3 is linked to, on the
-same port, and any named in $PROGRESS_PEERS as label=http://host:port, separated by commas.`;
+Each machine's hub shows that machine's works. The central hub shows every linked machine's.`;
 
 class UsageError extends Error {}
 
@@ -87,7 +89,19 @@ function port(): number {
   return n;
 }
 
+/**
+ * Where a work's page opens in the hub. On a machine linked to a central hub that is the central hub, whose
+ * address opens on any of the user's devices, where this machine's own opens only here. The address names the
+ * work alone: the central hub finds it by that, whichever machine it is on.
+ */
 function hubLink(work: string): string {
+  let central = null;
+  try {
+    central = readLink(linkFile());
+  } catch {
+    // A link that can't be read is no link: `serve` says why.
+  }
+  if (central) return `${central.url}/w/${encodeURIComponent(work)}`;
   return `http://127.0.0.1:${port()}/w/${encodeURIComponent(work)}`;
 }
 
@@ -277,7 +291,7 @@ function commandPath(): void {
   for (const folder of found) console.log(folder.file);
 }
 
-/** The hub keeps the list, so the todo is handed to the one that is running. */
+/** The hub keeps the list, so the todo is handed to the one that is running, which works with no network. */
 async function commandTodo(args: readonly string[]): Promise<void> {
   const text = args.join(" ").trim();
   if (text === "") throw new UsageError('Say what to remember: progress todo "<text>"');
@@ -292,7 +306,14 @@ async function commandTodo(args: readonly string[]): Promise<void> {
     body: JSON.stringify({ op: "add", text, work, project: work === null ? (located?.project ?? null) : null }),
   }).catch(() => null);
   if (!response?.ok) throw new UsageError(`The hub at ${hub} did not take the todo. It may not be running: progress serve starts it.`);
-  console.log(`Added to the user's todos${work ? `, linked to ${work}` : ""}. They are at ${hub}/#todos`);
+  // On a linked machine the todo goes on to the central hub with the hub's next send, and the user's todos are there.
+  let central: string | null = null;
+  try {
+    central = readLink(linkFile())?.url ?? null;
+  } catch {
+    // A link that can't be used sends nothing, so the todo stays on this machine's hub.
+  }
+  console.log(`Added to the user's todos${work ? `, linked to ${work}` : ""}. They are at ${central ?? hub}/#todos`);
 }
 
 /** The work's folder: named by a path to it or its page, by its name, or else the one this thread belongs to. */
@@ -568,8 +589,6 @@ async function commandServe(): Promise<void> {
   const { serve } = await import("./server/serve.ts");
   const home = progressHome();
   const hosts = (process.env.PROGRESS_HOSTS ?? "").split(",").map((name) => name.trim()).filter((name) => name !== "");
-  // The user's other machines: the ones a harness is linked to, and any named in the environment.
-  const own = new Set(["127.0.0.1", "localhost", ...hosts].map((name) => name.toLowerCase()));
   // A link that can't be used is said once, and the hub runs as it does with none.
   let central = null;
   try {
@@ -577,7 +596,7 @@ async function commandServe(): Promise<void> {
   } catch (error) {
     console.log(`progress: sending to no central hub. ${error instanceof Error ? error.message : String(error)}`);
   }
-  const running = serve({ home, port: port(), hosts, central, others: findRemotes(agentSources(), port(), own).map((remote) => new RemoteStore(remote)) });
+  const running = serve({ home, port: port(), hosts, central });
   console.log(`Progress hub on ${running.url}, reading ${home}${central ? `, sending to ${central.url} as ${central.machine}` : ""}`);
   for (const source of running.own.state().sources) if (!source.health.ok) console.log(`${source.label}: ${source.health.reason}`);
 }

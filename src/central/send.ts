@@ -5,9 +5,9 @@ import { promisify } from "node:util";
 import { gzip } from "node:zlib";
 import type { Health, Instant, Marks, Todo, WorkDetail } from "../core/types.ts";
 import type { DiskStore } from "../stores/disk/index.ts";
-import { linkedFiles } from "../stores/remote.ts";
+import { linkedFiles } from "./received.ts";
 import { readOrNull } from "../core/reader.ts";
-import { credentialMachine, FORMAT, MOST_FILE_BYTES, MOST_FILES, readOrders, SEND_PATH, UPLOAD_PATH, type Answer, type FileRef, type MarkOrder, type Send, type Snapshot, type StateSend } from "./protocol.ts";
+import { credentialMachine, FORMAT, MOST_FILE_BYTES, MOST_FILES, readOrders, readTakenTodos, SEND_PATH, UPLOAD_PATH, type Answer, type FileRef, type MarkOrder, type Send, type Snapshot, type StateSend } from "./protocol.ts";
 
 /** Where this machine sends, the credential it was linked with, and the machine id that credential was made for. */
 export interface Link {
@@ -79,12 +79,17 @@ const RETRY_MS = 30_000;
  * An answer may carry marks changed on the central hub, as orders for this machine. Each is applied with `apply`,
  * which writes the marks file as a click on this machine's own hub does, and each send says the highest order
  * applied since the hub started. One that restarts says 0 and is handed the same orders again, which change nothing.
+ *
+ * The answer to a state may also name the todos the central hub has taken into the user's list. They are let go of
+ * with `release`, which removes them from the todos file in one write, so the file holds
+ * only the todos the central hub has not taken yet.
  */
 export class Sender {
   private readonly link: Link;
   private readonly own: DiskStore;
   private readonly extras: () => { marks: Marks; todos: readonly Todo[] };
   private readonly apply: (order: MarkOrder) => void;
+  private readonly release: (todos: readonly string[]) => void;
   private readonly changes: () => string;
   private readonly fetch: typeof fetch;
   private readonly log: (line: string) => void;
@@ -102,11 +107,12 @@ export class Sender {
   /** Files left out, each named in the log once. One is looked at again on each send, but never read. */
   private readonly left = new Set<string>();
 
-  constructor(options: { link: Link; own: DiskStore; extras: () => { marks: Marks; todos: readonly Todo[] }; apply?: (order: MarkOrder) => void; changes: () => string; fetch?: typeof fetch; log?: (line: string) => void }) {
+  constructor(options: { link: Link; own: DiskStore; extras: () => { marks: Marks; todos: readonly Todo[] }; apply?: (order: MarkOrder) => void; release?: (todos: readonly string[]) => void; changes: () => string; fetch?: typeof fetch; log?: (line: string) => void }) {
     this.link = options.link;
     this.own = options.own;
     this.extras = options.extras;
     this.apply = options.apply ?? (() => undefined);
+    this.release = options.release ?? (() => undefined);
     this.changes = options.changes;
     this.fetch = options.fetch ?? fetch;
     this.log = options.log ?? ((line) => console.log(line));
@@ -125,8 +131,9 @@ export class Sender {
     this.busy = true;
     const changes = this.changes();
     try {
-      const orders = await this.send(changes === this.sentChanges);
+      const { orders, todos } = await this.send(changes === this.sentChanges);
       this.sentChanges = changes;
+      if (todos.length > 0) this.release(todos);
       // Said applied only once the file holds it: a write that fails throws, and the rest wait for the next send.
       for (const order of [...orders].sort((a, b) => a.n - b.n)) {
         this.apply(order);
@@ -161,9 +168,9 @@ export class Sender {
     this.said = line;
   }
 
-  /** One send, and the orders its answer carries. */
-  private async send(quiet: boolean): Promise<readonly MarkOrder[]> {
-    const orders = (answer: Answer) => readOrNull(readOrders, answer.marks ?? []) ?? [];
+  /** One send, and the orders and the todos taken that its answer carries. */
+  private async send(quiet: boolean): Promise<{ orders: readonly MarkOrder[]; todos: readonly string[] }> {
+    const orders = (answer: Answer) => ({ orders: readOrNull(readOrders, answer.marks ?? []) ?? [], todos: readOrNull(readTakenTodos, answer.todos ?? []) ?? [] });
     if (quiet) return orders(await post(this.link, { format: FORMAT, kind: "hello", applied: this.applied }, this.fetch));
     const store = this.own.state();
     // Read with the marks, so the marks this state carries hold every order up to it.

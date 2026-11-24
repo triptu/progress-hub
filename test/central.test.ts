@@ -2,10 +2,10 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { HubState, Instant, NeedEntry, PlanEntry, PullRequest, SessionRef, WorkDetail } from "../src/core/types.ts";
+import type { HubState, Instant, NeedEntry, PlanEntry, PullRequest, SessionRef, Todo, WorkDetail, WorkId } from "../src/core/types.ts";
 import { CentralHub, type HubContext, type Kv } from "../src/central/hub.ts";
 import { base64url, GOOGLE_CERTS_URL, makeCredential, makeOrder, makeSession, ORDER_SEC } from "../src/central/login.ts";
-import { FORMAT, MACHINES_PATH, MOST_FILE_BYTES, MOST_FILES, MOST_MACHINE_BYTES, MOST_MACHINES, MOST_MARK_KEY_CHARS, MOST_MARK_KEYS, MOST_MARKS_BYTES, MOST_ORDERS, MOST_PAGES, MOST_ROW_BYTES, MOST_SEND_BYTES, MOST_SEND_ZIPPED, type Answer, type Forgotten, type HeldMachine, type StateSend } from "../src/central/protocol.ts";
+import { FORMAT, MACHINES_PATH, MOST_FILE_BYTES, MOST_FILES, MOST_MACHINE_BYTES, MOST_MACHINES, MOST_MARK_KEY_CHARS, MOST_MARK_KEYS, MOST_MARKS_BYTES, MOST_ORDERS, MOST_PAGES, MOST_ROW_BYTES, MOST_SEND_BYTES, MOST_SEND_ZIPPED, MOST_TODO_BYTES, MOST_TODOS, MOST_TODOS_BYTES, type Answer, type Forgotten, type HeldMachine, type StateSend } from "../src/central/protocol.ts";
 import { linkTo, readLink, Sender } from "../src/central/send.ts";
 import { handle, type Env } from "../src/central/worker.ts";
 import { serve } from "../src/server/serve.ts";
@@ -16,8 +16,7 @@ import type { StoreState } from "../src/stores/store.ts";
 
 // ---------------------------------------------------------------- The Worker, with Cloudflare's parts kept in memory
 
-function memoryHub(): { ctx: HubContext; kv: Map<string, string>; heard: string[] } {
-  const kv = new Map<string, string>();
+function memoryHub(kv = new Map<string, string>()): { ctx: HubContext; kv: Map<string, string>; heard: string[] } {
   // What the pages that listen were told.
   const heard: string[] = [];
   const store: Kv = {
@@ -58,8 +57,9 @@ function memoryHub(): { ctx: HubContext; kv: Map<string, string>; heard: string[
 const MACHINE_KEY = "machine-key-0123456789-abcdefghijklmnopqrstu";
 
 /** A central hub: its Worker's environment, with the Durable Object, the bucket and the limiter kept in memory. */
-function makeCentral() {
-  const memory = memoryHub();
+/** A central hub in memory. Given storage another one wrote, it is that hub started again. */
+function makeCentral(stored?: Map<string, string>) {
+  const memory = memoryHub(stored);
   const bucket = new Map<string, Uint8Array<ArrayBuffer>>();
   const calls = { put: 0, head: 0, list: 0, refused: 0, failUploads: false, allowSignIns: Infinity, signIns: 0, headWaits: null as Promise<void> | null, putWaits: null as Promise<void> | null };
   const files: Env["FILES"] = {
@@ -185,9 +185,9 @@ const sendAs = async (machineId: string, body: unknown, to: (request: Request) =
   return to(new Request(`${at}/api/machine`, { method: "POST", headers: { Authorization: `Bearer ${await makeCredential(MACHINE_KEY, machineId)}`, "Content-Length": String(zipped.length) }, body: zipped }));
 };
 
-/** This test machine's own state and pages, as its hub answers them, to send under another machine's credential. */
+/** This test machine's own state, as its hub sends it, and its pages, to send under another machine's credential. */
 async function ownSend(at: number, change: (state: StoreState) => StoreState = (state) => state): Promise<StateSend & { bodies: Record<string, string> }> {
-  const state = change((await (await fetch(`${machine.url}/api/state?own=1`)).json()) as StoreState);
+  const state = change(machine.own.state());
   const pages: Record<string, string> = {};
   const bodies: Record<string, string> = {};
   for (const work of state.works) {
@@ -300,18 +300,15 @@ test("signing out clears the cookie and goes back to the sign-in page", async ()
   expect((await fetch(`${at}/auth/signout`, { method: "POST", headers: { Cookie: cookie, Origin: "https://elsewhere.example" } })).status).toBe(403);
 });
 
-test("signed in, the app is served and no other site may frame it, and the hub takes no change but to the marks", async () => {
+test("signed in, the app is served and no other site may frame it, and the hub takes no change but to the marks and the todos", async () => {
   const page = await get("/w/alpha/board");
   expect(page.status).toBe(200);
   expect(await page.text()).toContain("The app");
   expect(page.headers.get("content-security-policy")).toBe("frame-ancestors 'none'");
   expect(page.headers.get("x-frame-options")).toBe("DENY");
   const post = (path: string, body: unknown) => fetch(at + path, { method: "POST", headers: { Cookie: cookie, Origin: at, "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.status);
-  expect(await post("/api/todos", { op: "add", text: "x" })).toBe(405);
   expect(await post("/api/open", { work: "a", url: "b" })).toBe(405);
   expect(await post("/api/state", {})).toBe(405);
-  // The state says so, and the app offers the controls for marks and none for todos.
-  expect((await shown()).todosReadOnly).toBe(true);
 });
 
 // ---------------------------------------------------------------- What a machine sends
@@ -323,12 +320,11 @@ test("a linked machine's hub sends its state, pages and files, and the central h
     const answer = await shown();
     return answer.works.some((work) => work.id === `${id}~alpha`) ? answer : null;
   });
-  expect(state.todosReadOnly).toBe(true);
   expect(state.signedIn).toBe(true);
   expect(state.works.map((work) => work.id as string)).toContain(`${id}~alpha`);
   expect(state.stores.find((store) => store.id === id)?.health.ok).toBe(true);
   // Marks and todos come with the machine's work. A mark on another machine's work is that machine's to send, and
-  // a mark on a pull request or a stalled thread is about this machine's own.
+  // a mark on a pull request or a stalled thread is about this machine's own. A todo is linked to the machine's work.
   expect(state.marks).toEqual({ viewed: [`${id}~alpha/shipped/the-first-part`, `${id}~https://github.com/acme/app/pull/7`], dismissed: [`${id}~alpha:needs/pick-one`, `stall:${id}~t3:someone-elses`] });
   expect(state.todos.map((todo) => todo.work)).toEqual([`${id}~alpha`] as never[]);
   const need = state.needs.find((entry) => entry.work === `${id}~alpha`);
@@ -336,7 +332,9 @@ test("a linked machine's hub sends its state, pages and files, and the central h
 
   const detail = (await (await get(`/api/work/${encodeURIComponent(`${id}~alpha`)}`)).json()) as WorkDetail;
   expect(detail.summary.title).toBe("Alpha");
-  expect((await get("/api/work/alpha")).status).toBe(404);
+  // Asked for by its name alone, as an address has it, it is the same work. A name no machine has is none.
+  expect(String(((await (await get("/api/work/alpha")).json()) as WorkDetail).summary.id)).toBe(`${id}~alpha`);
+  expect((await get("/api/work/no-such-work")).status).toBe(404);
 
   // Files come with the headers the machine's own hub gives them, but for how long they are kept.
   const picture = await get(`/files/${id}~alpha/images/a%20b.png?v=1`);
@@ -602,6 +600,45 @@ test("an event with a field its kind does not have is refused, and the machine's
   expect(await read()).toEqual(before);
 });
 
+test("what a machine sends is checked before the hub relies on it, and its addresses are made safe by field, not by spelling", async () => {
+  const { env: hubEnv } = makeCentral();
+  const call = (request: Request) => handle(request, hubEnv);
+  const read = async (path: string) => (await call(new Request(`https://hub.example${path}`, { headers: { Cookie: await sessionFor(hubEnv) } }))).json();
+  const body = `<p><img src='/files/w/one.png'><img src="/files/w/two.png"><a href="/files/w/doc.pdf">doc</a> /files/ in words stays</p>`;
+  const work = { id: "w", title: "W", project: null, machine: null, settled: false, lastChangeAt: "2026-11-10T09:00:00.000Z", preview: "", summary: "/files/ in a summary stays", goal: "", needsCount: 0, workingAgents: 0, agents: 0, pullRequests: { total: 0, merged: 0 }, shipped: 0, threadLink: "javascript:alert(1)", links: [{ label: "App", url: "http://localhost:3000", href: "http://localhost:3000", up: true }, { label: "Bad", url: "javascript:alert(1)", href: "javascript:alert(1)", up: null }] };
+  const shipped = { heading: "Shipped", kind: "shipped", html: "", items: [{ id: "shipped/The parser is in.", title: "The parser is in.", titleHtml: "The parser is in.", html: "", important: false, since: null, prs: [], commits: [] }] };
+  const page = JSON.stringify({ summary: work, body: { goal: body, summary: body, sections: [shipped] }, agents: [], pullRequests: [], feed: [], notes: [] });
+  // Sent as a hub of an earlier build sends it, with no list of what shipped, and with a field no type has.
+  const good = { works: [{ ...work, extra: "not read" }], needs: [], plan: [], feed: [], latestMedia: null, sources: [] };
+  const send = (at: number, store: unknown) => ({ format: FORMAT, kind: "state", label: "Box", at, state: { store, media: [], marks: { viewed: [], dismissed: [] }, todos: [] }, pages: { w: new Bun.CryptoHasher("sha256").update(page).digest("hex") }, bodies: { w: page }, files: [] });
+  // JSON that is not a state: an empty object, and a stalled agent with no stall. Neither is taken.
+  for (const wrong of [{}, { ...good, needs: [{ source: "stall", work: null, stall: null }] }]) expect((await sendAs("box-1", send(Date.now(), wrong), call)).status).toBe(400);
+  // Media that is not media is refused the same way.
+  const first = send(Date.now(), good);
+  expect((await sendAs("box-1", { ...first, state: { ...first.state, media: [null] } }, call)).status).toBe(400);
+
+  expect((await sendAs("box-1", send(Date.now() + 1, good), call)).status).toBe(200);
+  const state = (await read("/api/state")) as HubState;
+  const [seen] = state.works;
+  // A link the browser would run is dropped, plain words that look like a path stay, and the thread link is emptied.
+  expect(seen?.links.map((link) => link.label)).toEqual(["App"]);
+  expect([seen?.threadLink, seen?.summary]).toEqual(["", "/files/ in a summary stays"]);
+  // What is read is built again from what was checked: a field no type has is not kept.
+  expect(seen && "extra" in seen).toBe(false);
+  expect(state.shipped).toEqual([]);
+
+  const detail = (await read(`/api/work/${encodeURIComponent("box-1~w")}`)) as WorkDetail;
+  // An address names the work alone, and the hub finds it on the machine that has it.
+  expect(String(((await read("/api/work/w")) as WorkDetail).summary.id)).toBe("box-1~w");
+  // Written with single quotes, which a text replace on `"/files/` missed.
+  expect(detail.body.goal).toContain(`src="/files/box-1~w/one.png"`);
+  expect(detail.body.goal).toContain(`src="/files/box-1~w/two.png"`);
+  expect(detail.body.goal).toContain(`href="/files/box-1~w/doc.pdf"`);
+  expect(detail.body.goal).toContain("/files/ in words stays");
+  // The work's page has its sections whole, as every build sends them, which is what the work's board is made from.
+  expect(detail.body.sections.map((section) => [section.kind, section.items.map((item) => item.title)])).toEqual([["shipped", ["The parser is in."]]]);
+});
+
 test("one machine's marks hide nothing of another's, even on a stalled thread or a pull request both name", async () => {
   const { env: hubEnv } = makeCentral();
   const call = (request: Request) => handle(request, hubEnv);
@@ -854,6 +891,17 @@ const markMain = (body: unknown) => fetch(`${at}/api/marks`, { method: "POST", h
  */
 const TAKEN_MS = 60_000;
 
+test("a linked machine's own address sends a page on to the same page on the central hub, and ?local keeps it there", async () => {
+  await until(async () => ((await shown()).works.some((work) => work.id === `${id}~alpha`) ? true : null));
+  const page = (path: string) => fetch(`${machine.url}${path}`, { redirect: "manual" });
+  const sent = await page("/w/alpha/board");
+  expect([sent.status, sent.headers.get("location")]).toEqual([302, `${at}/w/alpha/board`]);
+  expect((await page("/")).headers.get("location")).toBe(`${at}/`);
+  expect((await page("/w/alpha/board?local")).status).toBe(200);
+  // What agents and the page itself ask for stays here.
+  expect((await page("/api/state")).status).toBe(200);
+});
+
 test("a mark made on the central hub shows there at once, reaches the machine's own hub and its marks file, and is then no longer an order", async () => {
   await until(async () => ((await shown()).works.some((work) => work.id === `${id}~alpha`) ? true : null));
   const key = `${id}~alpha/next/the-second-part`;
@@ -997,7 +1045,7 @@ test("a machine leaves out an order that is not about its own work, whatever hub
   const dir = mkdtempSync(join(tmpdir(), "progress-owned-"));
   mkdirSync(join(dir, "home", "alpha"), { recursive: true });
   writeFileSync(join(dir, "home", "alpha", "progress.md"), "---\ntitle: Alpha\n---\n\nA task.\n\n## Shipped\n\n- Finished.\n");
-  // A hub that hands over four orders: one for this machine's work, one for a peer's work it shows, one for no work, one for a peer's stalled thread.
+  // A hub that hands over four orders: one for this machine's work, one for another machine's work, one for no work, one for another machine's stalled thread.
   const sends: { applied?: number }[] = [];
   const orders = [
     { n: 5, kind: "viewed", key: "alpha/shipped/finished", on: true },
@@ -1098,6 +1146,174 @@ test("a removed machine's orders are gone, and no new one can be made for it", a
   expect(kv.has("orders:box-1")).toBe(false);
 });
 
+// ---------------------------------------------------------------- The user's todos, kept on the central hub
+
+/** A change to todos, as the hub's own page sends it to a central hub of these tests. */
+const todoOn = async (call: (request: Request) => Promise<Response>, hubEnv: Env, body: unknown, headers?: Record<string, string>) =>
+  call(new Request("https://hub.example/api/todos", { method: "POST", headers: headers ?? { Cookie: await sessionFor(hubEnv), Origin: "https://hub.example", Host: "hub.example", "Content-Type": "application/json" }, body: typeof body === "string" ? body : JSON.stringify(body) }));
+
+/** A todo as a machine keeps it in its own file. */
+const machineTodo = (id: string, text = `Todo ${id}`, work: string | null = null): Todo => ({ id, text, description: "", work: work as WorkId | null, project: null, addedAt: "2026-11-20T10:00:00.000Z" as Instant, doneAt: null });
+
+/** A central hub of its own, with a session, and a state a machine sends with these todos. */
+async function todoHub() {
+  const central = makeCentral();
+  const call = (request: Request) => handle(request, central.env);
+  const session = await sessionFor(central.env);
+  const read = async () => (await (await call(new Request("https://hub.example/api/state", { headers: { Cookie: session } }))).json()) as HubState;
+  const base = await ownSend(Date.now());
+  let clock = base.at;
+  // Each state is read later than the last, as a machine's are.
+  const sendTodos = async (machineId: string, todos: readonly Todo[]) => {
+    const answer = await sendAs(machineId, { ...base, label: machineId, at: ++clock, state: { ...base.state, todos } }, call);
+    expect(answer.status).toBe(200);
+    return ((await answer.json()) as Answer).todos ?? [];
+  };
+  return { ...central, call, read, sendTodos };
+}
+
+test("a todo added, edited, marked done and removed on the central hub shows in its state each time, and nothing but the hub's own signed-in page changes one", async () => {
+  const { env: hubEnv, call, read, kv } = await todoHub();
+  expect((await todoOn(call, hubEnv, { op: "add", text: "Call the bank", description: "", work: null, project: "home" })).status).toBe(204);
+  const [added] = (await read()).todos;
+  expect(added).toEqual(expect.objectContaining({ text: "Call the bank", project: "home", doneAt: null }));
+  expect((await todoOn(call, hubEnv, { op: "edit", id: added!.id, text: "Call the bank today", description: "About the card.", work: null, project: null })).status).toBe(204);
+  expect((await read()).todos.map(({ text, description, project }) => ({ text, description, project }))).toEqual([{ text: "Call the bank today", description: "About the card.", project: null }]);
+  expect((await todoOn(call, hubEnv, { op: "done", id: added!.id, on: true })).status).toBe(204);
+  expect((await read()).todos[0]?.doneAt).toEqual(expect.any(String));
+
+  const stored = new Map(kv);
+  const before = await read();
+  const change = JSON.stringify({ op: "remove", id: added!.id });
+  const tries: [string, Record<string, string>, number][] = [
+    ["signed out", { Origin: "https://hub.example" }, 401],
+    ["another origin", { Cookie: await sessionFor(hubEnv), Origin: "https://elsewhere.example" }, 403],
+    ["no origin", { Cookie: await sessionFor(hubEnv) }, 403],
+    ["a machine's credential", { Authorization: `Bearer ${await makeCredential(MACHINE_KEY, "box-1")}`, Origin: "https://hub.example" }, 401],
+    ["a deployer's order", { Authorization: `Bearer ${await makeOrder(MACHINE_KEY, "POST", "/api/todos", Math.floor(Date.now() / 1000))}`, Origin: "https://hub.example" }, 401],
+  ];
+  for (const [who, headers, status] of tries) expect([who, (await todoOn(call, hubEnv, change, { ...headers, "Content-Type": "application/json" })).status]).toEqual([who, status]);
+  // A machine's credential reaches only the machine routes, and a send of the same id makes a todo of its own.
+  expect(await sendAs("box-1", { format: FORMAT, kind: "hello" }, call).then((r) => r.status)).toBe(200);
+  expect(new Map(kv)).toEqual(stored);
+  expect(await read()).toEqual(before);
+
+  expect((await todoOn(call, hubEnv, { op: "remove", id: added!.id })).status).toBe(204);
+  expect((await read()).todos).toEqual([]);
+  expect((await todoOn(call, hubEnv, { op: "restore", todo: before.todos[0] })).status).toBe(204);
+  expect((await read()).todos).toEqual(before.todos);
+});
+
+test("a todo a linked machine has is taken once: it shows on the central hub, the machine's file lets it go, and once removed there it stays removed", async () => {
+  await until(async () => ((await shown()).todos.some((todo) => todo.id === `${id}~t1`) ? true : null));
+  const ownTodos = () => JSON.parse(readFileSync(join(home, ".todos.json"), "utf8")) as Todo[];
+  // The machine lets it go, and its next state names it no more, so the hub forgets it took it.
+  await until(async () => (ownTodos().length === 0 ? true : null), TAKEN_MS);
+  expect((await ownState()).todos).toEqual([]);
+  const taken = (await shown()).todos.find((todo) => todo.id === `${id}~t1`)!;
+  expect([taken.text, taken.work]).toEqual(["Read /files/alpha/secret.txt", `${id}~alpha` as WorkId]);
+
+  const change = (body: unknown) => fetch(`${at}/api/todos`, { method: "POST", headers: { Cookie: cookie, Origin: at, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  expect((await change({ op: "remove", id: taken.id })).status).toBe(204);
+  // An agent adds one on the machine: it reaches the central hub with the machine's next send, and the removed one does not come back.
+  const local = await fetch(`${machine.url}/api/todos`, { method: "POST", headers: { Origin: machine.url, "Content-Type": "application/json" }, body: JSON.stringify({ op: "add", text: "Later", work: null, project: null }) });
+  expect(local.status).toBe(204);
+  const later = await until(async () => (await shown()).todos.find((todo) => todo.text === "Later" && todo.id.startsWith(`${id}~`)) ?? null, TAKEN_MS);
+  expect((await shown()).todos.map((todo) => todo.id)).not.toContain(`${id}~t1`);
+  await until(async () => (ownTodos().length === 0 ? true : null), TAKEN_MS);
+  expect((await change({ op: "remove", id: later.id })).status).toBe(204);
+}, 3 * TAKEN_MS);
+
+test("a machine that keeps sending the same todo, as an older build does, has it taken once, and removing it on the central hub sticks", async () => {
+  const { env: hubEnv, call, read, sendTodos } = await todoHub();
+  const todo = machineTodo("t1", "Water the plants", "alpha");
+  expect(await sendTodos("box-1", [todo])).toEqual(["t1"]);
+  expect(await sendTodos("box-1", [todo])).toEqual(["t1"]);
+  // Linked to that machine's own work, and to no other machine's.
+  expect((await read()).todos.map((shownTodo) => [shownTodo.id, shownTodo.work])).toEqual([["box-1~t1", "box-1~alpha"]]);
+  expect(await sendTodos("box-2", [todo])).toEqual(["t1"]);
+  expect((await read()).todos.map((shownTodo) => [shownTodo.id, shownTodo.work]).sort()).toEqual([
+    ["box-1~t1", "box-1~alpha"],
+    ["box-2~t1", "box-2~alpha"],
+  ]);
+  // Edited there, a todo taken already is not changed by the machine's copy, and removed it stays removed.
+  expect((await todoOn(call, hubEnv, { op: "edit", id: "box-1~t1", text: "Water the plants twice", description: "", work: "box-1~alpha", project: null })).status).toBe(204);
+  expect(await sendTodos("box-1", [{ ...todo, text: "Changed on the machine" }])).toEqual(["t1"]);
+  expect((await read()).todos.find((shownTodo) => shownTodo.id === "box-1~t1")?.text).toBe("Water the plants twice");
+  expect((await todoOn(call, hubEnv, { op: "remove", id: "box-1~t1" })).status).toBe(204);
+  expect(await sendTodos("box-1", [todo])).toEqual(["t1"]);
+  expect((await read()).todos.map((shownTodo) => shownTodo.id)).toEqual(["box-2~t1"]);
+  // What is remembered is only what the machine still sends.
+  expect(await sendTodos("box-1", [])).toEqual([]);
+});
+
+test("too many todos, too long a todo and a body over the cap change nothing", async () => {
+  const { env: hubEnv, call, read, sendTodos, kv } = await todoHub();
+  const long = "x".repeat(MOST_TODO_BYTES);
+  // A machine's todo past a limit is not taken, and stays on the machine.
+  expect(await sendTodos("box-1", [machineTodo("long", long)])).toEqual([]);
+  const many = Array.from({ length: MOST_TODOS + 1 }, (_, at) => machineTodo(`t${at}`));
+  expect((await sendTodos("box-1", many)).length).toBe(MOST_TODOS);
+  const before = await read();
+  expect(before.todos.length).toBe(MOST_TODOS);
+  expect(before.todos.map((todo) => todo.id)).not.toContain("box-1~long");
+  const stored = new Map(kv);
+  const refused: [unknown, number][] = [
+    [{ op: "add", text: "One more", description: "", work: null, project: null }, 409],
+    [{ op: "edit", id: before.todos[0]!.id, text: "Short", description: long, work: null, project: null }, 413],
+    [{ op: "add", text: "x", description: "y".repeat(MOST_TODOS_BYTES), work: null, project: null }, 413],
+    [{ op: "rename", id: before.todos[0]!.id }, 400],
+    ["not json", 400],
+  ];
+  for (const [at, [body, status]] of refused.entries()) {
+    const answer = await todoOn(call, hubEnv, body);
+    expect([at, answer.status]).toEqual([at, status]);
+    // Each says why.
+    expect((await answer.text()).length).toBeGreaterThan(0);
+  }
+  expect(new Map(kv)).toEqual(stored);
+  expect(await read()).toEqual(before);
+});
+
+test("removing a machine leaves the todos taken from it", async () => {
+  const { call, read, sendTodos } = await todoHub();
+  expect(await sendTodos("box-1", [machineTodo("t1", "Keep this", "alpha")])).toEqual(["t1"]);
+  expect((await call(await order("DELETE", `${MACHINES_PATH}/box-1`))).status).toBe(200);
+  expect((await read()).todos.map((todo) => [todo.id, todo.text])).toEqual([["box-1~t1", "Keep this"]]);
+});
+
+test("the todos a hub of an earlier build showed from a machine's state are the user's after the update, once", async () => {
+  const { sendTodos, kv } = await todoHub();
+  expect(await sendTodos("box-1", [])).toEqual([]);
+  // As an earlier build kept it: the machine's todos beside its state, made the hub's own.
+  const row = JSON.parse(kv.get("shown:box-1")!) as { held: Record<string, unknown> };
+  row.held.todos = [
+    { ...machineTodo("old-1", "From before"), id: "box-1~old-1" },
+    { ...machineTodo("old-2", "Also from before"), id: "box-1~old-2" },
+  ];
+  kv.set("shown:box-1", JSON.stringify(row));
+  const started = (stored: Map<string, string>) => {
+    const again = makeCentral(stored);
+    const ask = (request: Request) => handle(request, again.env);
+    return { env: again.env, ask, state: async () => (await (await ask(new Request("https://hub.example/api/state", { headers: { Cookie: await sessionFor(again.env) } }))).json()) as HubState };
+  };
+  const updated = started(kv);
+  expect((await updated.state()).todos.map((todo) => todo.text).sort()).toEqual(["Also from before", "From before"]);
+  // One the user removes stays removed when the hub starts again, though the machine has said nothing since.
+  expect((await todoOn(updated.ask, updated.env, { op: "remove", id: "box-1~old-1" })).status).toBe(204);
+  expect((await started(kv).state()).todos.map((todo) => todo.text)).toEqual(["Also from before"]);
+});
+
+test("a machine's todo with a time that is no time is refused whole, and the list still takes a new one", async () => {
+  const { env: hubEnv, call, read } = await todoHub();
+  const base = await ownSend(Date.now() + 5);
+  const bad = await sendAs("box-1", { ...base, label: "box-1", state: { ...base.state, todos: [{ ...machineTodo("t1"), addedAt: "soon" }] } }, call);
+  expect(bad.status).toBe(400);
+  expect((await read()).todos).toEqual([]);
+  expect((await todoOn(call, hubEnv, { op: "add", text: "Still works", description: "", work: null, project: null })).status).toBe(204);
+  expect((await read()).todos.map((todo) => todo.text)).toEqual(["Still works"]);
+});
+
 // ---------------------------------------------------------------- The local hub keeps running
 
 test("a broken link file leaves the local hub starting, and says once what is wrong", async () => {
@@ -1107,7 +1323,7 @@ test("a broken link file leaves the local hub starting, and says once what is wr
   for (const link of [dir, join(dir, "truncated")]) {
     const port = 40000 + Math.floor(Math.random() * 20000);
     const child = Bun.spawn(["bun", join(import.meta.dir, "..", "src", "main.ts"), "serve"], {
-      env: { ...process.env, PROGRESS_HOME: join(dir, "home"), PROGRESS_CENTRAL: link, PROGRESS_PORT: String(port), PROGRESS_T3_DB: "off", PROGRESS_PEERS: "" },
+      env: { ...process.env, PROGRESS_HOME: join(dir, "home"), PROGRESS_CENTRAL: link, PROGRESS_PORT: String(port), PROGRESS_T3_DB: "off" },
       stdout: "pipe",
       stderr: "pipe",
     });
