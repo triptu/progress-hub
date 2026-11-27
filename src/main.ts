@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import FORMAT from "../FORMAT.md" with { type: "text" };
 import { goalLine } from "./core/text.ts";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import { addSession, dropSessions, HomeError, listWorks, progressHome, readSessions, type WorkFolder } from "./core/home.ts";
 import { formerIds, instant, readJournal, replay, writeJournal } from "./core/journal.ts";
 import { doneKey } from "./core/marks.ts";
@@ -13,6 +13,21 @@ import { addItem, type Edit, EditError, type Live, moveItem, removeItem, type Re
 import { MarkStore } from "./stores/marks.ts";
 import { agentSources } from "./sources/index.ts";
 import { readFrom, refOf, SourceError, type AgentSource, type SourceRead } from "./sources/source.ts";
+import { outcomeCheck, outcomesOf, readOutcomes, today } from "./core/outcomes.ts";
+import { MEASURE_USAGE, measureLine, readMeasure } from "./measure.ts";
+import { CHANGE_USAGE, changeLine, checkSizes, readChange } from "./change.ts";
+import { readChanges } from "./core/changes.ts";
+import { flagsOf, one, UsageError } from "./flags.ts";
+
+const MEASURE_HELP = `Outcomes. Each reading is one line of <work>/outcomes.jsonl, stamped with the time and this session.
+The first reading fixes the unit, and the definition holds until a line changes it.
+
+${MEASURE_USAGE}`;
+
+const CHANGE_HELP = `Key changes. Each is one line of <work>/changes.jsonl, stamped with the time and this session,
+with its files as written. The hub shows what they do on the Key changes tab.
+
+${CHANGE_USAGE}`;
 
 const USAGE = `progress: one Markdown progress page per piece of work, and a hub in the browser above them.
 
@@ -27,6 +42,12 @@ const USAGE = `progress: one Markdown progress page per piece of work, and a hub
   progress todo "<text>"     add to the user's todos in the hub, for something they asked to be
                              reminded of. Linked to this thread's work when it has a page. On a
                              machine linked to a central hub, it goes on there with the next send.
+  progress measure "<outcome>" <value> --where prod|ci|local|guess
+                             record a reading of a number this work moves, in <work>/outcomes.jsonl.
+                             The hub draws them on the work's Outcomes tab. Details below.
+  progress change db <migration file>... --pr <link> --why "<one line>"
+                             record a pull request's database change, in <work>/changes.jsonl.
+                             The hub shows it on the Key changes tab. Details below.
   progress format            print the page format, for an agent that has not read it.
   progress link <address>    send this machine's work to a central hub at that address, with a
                              credential made for this machine on standard input, and restart the hub.
@@ -71,6 +92,10 @@ words with reword, never by hand.
                              say a Shipped item is live, or --not-live "<what it waits on>".
   progress remove "<line>"   take an item off, such as an ask that is settled.
 
+${MEASURE_HELP}
+
+${CHANGE_HELP}
+
 The pages live in $PROGRESS_HOME, else in the folder setup.sh recorded in
 ~/.config/progress/home. new and join record the work's agent sessions in <work>/.sessions.
 A hub linked with progress link sends to the central hub named in ~/.config/progress/central,
@@ -78,8 +103,6 @@ or in the file $PROGRESS_CENTRAL names.
 T3's database is read from ~/.t3/userdata/statev2.sqlite, or $PROGRESS_T3_DB; set it to
 "off" to read no T3 data.
 Each machine's hub shows that machine's works. The central hub shows every linked machine's.`;
-
-class UsageError extends Error {}
 
 function port(): number {
   const raw = process.env.PROGRESS_PORT;
@@ -339,32 +362,74 @@ function commandCheck(args: readonly string[]): void {
   const folder = workFolder(args[0], "Name the work to check: progress check <work>");
   const md = join(folder, "progress.md");
   const page = parsePage(readFileSync(md, "utf8"), folder);
-  printCheck(page, readSessions(folder), md, markedDone(page, folder));
+  const outcomes = join(folder, OUTCOMES);
+  const read = outcomesOf(existsSync(outcomes) ? readFileSync(outcomes, "utf8") : "");
+  const shipped = page.sections.filter((section) => section.kind === "shipped").flatMap((section) => section.items.map((item) => item.markdown));
+  const measured = outcomeCheck(read.outcomes, shipped, read.skipped, today(Date.now()));
+  printCheck(page, readSessions(folder), md, [...markedDone(page, folder), ...measured.notes], measured.lines);
 }
 
-/** The words and flags of a page command. A flag takes the word after it, and a flag given again adds another value. */
-function flagsOf(args: readonly string[], known: readonly string[]): { words: string[]; flags: Map<string, string[]> } {
-  const words: string[] = [];
-  const flags = new Map<string, string[]>();
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i] ?? "";
-    // A shell that keeps a variable whole hands over "--work <work>" as one argument. A known flag is read from it; any other line of text may start with two dashes.
-    const whole = /^--([a-z-]+)\s+(.+)$/s.exec(arg);
-    const name = whole?.[1] && known.includes(whole[1]) ? whole : /^--([a-z-]+)(?:=(.*))?$/s.exec(arg);
-    if (!name?.[1]) {
-      words.push(arg);
-      continue;
-    }
-    if (!known.includes(name[1])) throw new UsageError(`progress has no --${name[1]} here. It takes ${known.map((flag) => `--${flag}`).join(", ")}.`);
-    const value = name[2] ?? args[++i];
-    if (value === undefined || value.trim() === "") throw new UsageError(`--${name[1]} needs a value after it.`);
-    flags.set(name[1], [...(flags.get(name[1]) ?? []), value]);
-  }
-  return { words, flags };
+const OUTCOMES = "outcomes.jsonl";
+
+/**
+ * Appends one reading to the work's outcomes.jsonl, holding the page's lock, so two agents measuring at once
+ * each add their line. The line is checked against the readings already there, such as for its unit.
+ */
+function commandMeasure(args: readonly string[]): void {
+  if (args.includes("--help") || args.includes("-h")) return void console.log(MEASURE_HELP);
+  const ask = readMeasure(args);
+  const folder = workFolder(ask.work, `progress measure needs to know the work: run it from a thread on the work's page, or add --work <work>.`);
+  const file = join(folder, OUTCOMES);
+  const by = currentSession()?.ref ?? null;
+  const said = withPageLock(folder, () => {
+    const before = existsSync(file) ? readFileSync(file, "utf8") : "";
+    const line = measureLine(ask, readOutcomes(before).readings, instant(new Date()), by);
+    // A line a crash cut short is left on its own line, so only it is lost.
+    appendFileSync(file, `${before === "" || before.endsWith("\n") ? "" : "\n"}${JSON.stringify(line.reading)}\n`);
+    return line.said;
+  });
+  console.log(said);
+  console.log(file);
 }
 
-/** A flag's value. Given twice, the last one counts. */
-const one = (flags: Map<string, string[]>, name: string) => flags.get(name)?.at(-1);
+const CHANGES = "changes.jsonl";
+
+/**
+ * Appends one change to the work's changes.jsonl, holding the page's lock, with its files read from where the command
+ * runs and named from their repository's root.
+ */
+function commandChange(args: readonly string[]): void {
+  if (args.includes("--help") || args.includes("-h")) return void console.log(CHANGE_HELP);
+  const ask = readChange(args);
+  const sizes = ask.paths.map((path) => {
+    const stat = existsSync(path) ? statSync(path) : null;
+    if (!stat?.isFile()) throw new UsageError(`There is no file at ${path}. Nothing was written.`);
+    return stat.size;
+  });
+  checkSizes(sizes.reduce((sum, size) => sum + size, 0));
+  const files = ask.paths.map((path) => ({ path: shownPath(path), sql: readFileSync(path, "utf8") }));
+  const folder = workFolder(ask.work, `progress change needs to know the work: run it from a thread on the work's page, or add --work <work>.`);
+  const file = join(folder, CHANGES);
+  const by = currentSession()?.ref ?? null;
+  const said = withPageLock(folder, () => {
+    const before = existsSync(file) ? readFileSync(file, "utf8") : "";
+    const line = changeLine(ask, files, readChanges(before).changes, instant(new Date()), by);
+    appendFileSync(file, `${before === "" || before.endsWith("\n") ? "" : "\n"}${JSON.stringify(line.change)}\n`);
+    return line.said;
+  });
+  console.log(said);
+  console.log(file);
+}
+
+/**
+ * A file's path as the hub shows it, which a central hub may publish: a relative path as given, and an absolute one
+ * from the root of the repository it is in, else its name alone. Never where it is on this machine.
+ */
+function shownPath(path: string): string {
+  if (!isAbsolute(path)) return normalize(path).split(sep).join("/");
+  for (let dir = dirname(path); dirname(dir) !== dir; dir = dirname(dir)) if (existsSync(join(dir, ".git"))) return relative(dir, path).split(sep).join("/");
+  return basename(path);
+}
 
 function liveFlag(flags: Map<string, string[]>): Live | null {
   const on = one(flags, "live");
@@ -539,7 +604,7 @@ function markedDone(page: Page, folder: string): string[] {
 
 const short = (title: string) => (title.length > 110 ? `${title.slice(0, 109)}…` : title);
 
-function printCheck(page: Page, threads: readonly SessionRef[], file: string, more: readonly string[]): void {
+function printCheck(page: Page, threads: readonly SessionRef[], file: string, more: readonly string[], outcomes: readonly string[]): void {
   const out: string[] = [file, "", `Title: ${page.title}`, `Project: ${page.project ?? "not set"}`];
   out.push(`Threads: ${threads.length === 0 ? "none, so the hub can't show its agents or pull requests" : threads.join(", ")}`);
   if (page.done) out.push("Status: done");
@@ -559,6 +624,7 @@ function printCheck(page: Page, threads: readonly SessionRef[], file: string, mo
   }
   const other = page.sections.filter((s) => s.kind === null).map((s) => s.heading);
   if (other.length > 0) out.push("", `Drawn as written: ${other.join(", ")}`);
+  if (outcomes.length > 0) out.push("", ...outcomes);
   const notes = [...page.notes, ...more];
   out.push("", notes.length === 0 ? "Nothing to fix." : "To fix:");
   for (const note of notes) out.push(`  - ${note}`);
@@ -615,6 +681,10 @@ async function main(argv: readonly string[]): Promise<void> {
       return commandCheck(args);
     case "todo":
       return commandTodo(args);
+    case "measure":
+      return commandMeasure(args);
+    case "change":
+      return commandChange(args);
     case "format":
       console.log(FORMAT.trimEnd());
       return;

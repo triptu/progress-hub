@@ -238,6 +238,8 @@ export class Sender {
         continue;
       }
       const stat = statSync(real, { throwIfNoEntry: false });
+      // A folder a page links is listed, and its files are named on their own.
+      if (stat?.isDirectory()) continue;
       if (!stat?.isFile()) {
         leave(path, "it is not a file.");
         continue;

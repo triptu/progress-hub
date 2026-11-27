@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { HubState, Instant, NeedEntry, PlanEntry, PullRequest, SessionRef, Todo, WorkDetail, WorkId } from "../src/core/types.ts";
+import type { HubState, Instant, Media, NeedEntry, PlanEntry, PullRequest, SessionRef, Todo, WorkDetail, WorkId } from "../src/core/types.ts";
 import { CentralHub, type HubContext, type Kv } from "../src/central/hub.ts";
 import { base64url, GOOGLE_CERTS_URL, makeCredential, makeOrder, makeSession, ORDER_SEC } from "../src/central/login.ts";
 import { FORMAT, MACHINES_PATH, MOST_FILE_BYTES, MOST_FILES, MOST_MACHINE_BYTES, MOST_MACHINES, MOST_MARK_KEY_CHARS, MOST_MARK_KEYS, MOST_MARKS_BYTES, MOST_ORDERS, MOST_PAGES, MOST_ROW_BYTES, MOST_SEND_BYTES, MOST_SEND_ZIPPED, MOST_TODO_BYTES, MOST_TODOS, MOST_TODOS_BYTES, type Answer, type Forgotten, type HeldMachine, type StateSend } from "../src/central/protocol.ts";
@@ -137,6 +137,9 @@ mkdirSync(join(home, "alpha", "images"), { recursive: true });
 mkdirSync(join(home, "notes"), { recursive: true });
 writeFileSync(join(home, "alpha", "images", "a b.png"), "png bytes");
 writeFileSync(join(home, "alpha", "mock.html"), "<p>mock</p>");
+// A folder the page links: the files in it come too.
+mkdirSync(join(home, "alpha", "queries"));
+writeFileSync(join(home, "alpha", "queries", "q1.sql"), "select 1");
 // Named only in the page's words and in a todo: never a file the page shows.
 writeFileSync(join(home, "alpha", "secret.txt"), "only mentioned");
 // Shown by the page, but its real path is outside the work's folder.
@@ -144,7 +147,7 @@ writeFileSync(join(home, "notes", "private.png"), "private bytes");
 symlinkSync(join(home, "notes", "private.png"), join(home, "alpha", "leak.png"));
 writeFileSync(
   join(home, "alpha", "progress.md"),
-  "---\ntitle: Alpha\n---\n\nWhere it stands. The notes are at /files/alpha/secret.txt and `/files/alpha/secret.txt`.\n\n## Needs you\n\n### Pick one\n\n![Option A](mock.html)\n![Shot](images/a%20b.png)\n![Leak](leak.png)\n\n## Next\n\n- The second part.\n\n## Shipped\n\n- The first part.\n",
+  "---\ntitle: Alpha\n---\n\nWhere it stands. The notes are at /files/alpha/secret.txt and `/files/alpha/secret.txt`.\n\n## Needs you\n\n### Pick one\n\n![Option A](mock.html)\n![Shot](images/a%20b.png)\n![Leak](leak.png)\n\nThe [queries](queries/).\n\n## Next\n\n- The second part.\n\n## Shipped\n\n- The first part.\n",
 );
 const old = new Date(Date.now() - 60_000);
 utimesSync(join(home, "alpha", "progress.md"), old, old);
@@ -346,6 +349,10 @@ test("a linked machine's hub sends its state, pages and files, and the central h
   // Only what the machine's pages show is served.
   expect((await get(`/files/${id}~alpha/progress.md`)).status).toBe(404);
   expect((await get(`/files/${id}~alpha/images/a b.png`)).status).toBe(200);
+  // A folder the page links is listed, and the files in it are served.
+  const media = (await (await get("/api/media")).json()) as Media[];
+  expect(media.find((item) => item.kind === "folder")?.files?.map((file) => file.src)).toEqual([`/files/${id}~alpha/queries/q1.sql`]);
+  expect(await (await get(`/files/${id}~alpha/queries/q1.sql`)).text()).toBe("select 1");
 });
 
 test("the sender publishes no file that is only mentioned in text, nor one whose real path leaves its work's folder", async () => {
@@ -1339,7 +1346,40 @@ test("a broken link file leaves the local hub starting, and says once what is wr
   }
 }, 40_000);
 
+test("a database change alone, with no change to the page, reaches the central hub's Key changes with the work it is from", async () => {
+  await until(async () => ((await shown()).works.some((work) => work.id === `${id}~alpha`) ? true : null));
+  const change = { at: "2026-11-25T00:00:00.000Z", kind: "db", pr: "https://github.com/acme/kestrel/pull/412", why: "Each routine waits for an offline computer", files: [{ path: "db/001.sql", sql: "CREATE TABLE routine_waits (id uuid PRIMARY KEY);" }] };
+  writeFileSync(join(home, "alpha", "changes.jsonl"), `${JSON.stringify(change)}\n`);
+  const card = await until(async () => (await shown()).works.find((work) => work.id === `${id}~alpha` && work.latestChange) ?? null, 20_000);
+  expect(card.latestChange).toBe(change.at as Instant);
+  const changes: unknown = await (await get("/api/changes")).json();
+  expect(changes).toEqual([{ ...change, pull: null, work: `${id}~alpha`, workTitle: card.title, project: card.project }]);
+
+  // A hub of an earlier build kept the page without its changes, under the same hash. The next send is asked for it once more.
+  const key = `page:${id}:alpha`;
+  const kept = JSON.parse(String(main.kv.get(key))) as WorkDetail;
+  // A section named Changes puts the same key deeper in the page: only the page's own counts.
+  main.kv.set(key, JSON.stringify({ ...kept, changes: undefined, body: { ...kept.body, sections: [...kept.body.sections, { ...kept.body.sections[0]!, heading: "Changes", changes: [] }] } }));
+  const send = await ownSend(Date.now());
+  const answer = (await (await sendAs(id, { ...send, bodies: undefined })).json()) as Answer;
+  expect(answer.missing?.pages).toEqual(["alpha"]);
+  // The machine sends it as it sends any page the hub lacks, and the page has its changes again.
+  expect((await sendAs(id, { ...send, bodies: { alpha: send.bodies.alpha } })).status).toBe(200);
+  expect(String(main.kv.get(key))).toContain('"changes":');
+}, 30_000);
+
 /** A session for the owner on a hub of these tests. */
 async function sessionFor(hubEnv: Env): Promise<string> {
   return `__Host-progress=${await makeSession(hubEnv.SESSION_KEY, "owner@gmail.com", Math.floor(Date.now() / 1000))}`;
 }
+
+test("a reading alone, with no change to the page, reaches the central hub with the work's page and its card", async () => {
+  await until(async () => ((await shown()).works.some((work) => work.id === `${id}~alpha`) ? true : null));
+  const reading = { at: "2026-11-25T00:00:00Z", outcome: "Search median", value: 84, where: "ci", n: 40, window: "Nov 24", source: "bench.sh", set: { unit: "ms", better: "lower", star: true, group: "Speed" } };
+  writeFileSync(join(home, "alpha", "outcomes.jsonl"), `${JSON.stringify(reading)}\n${JSON.stringify({ ...reading, at: "2026-11-26T00:00:00Z", value: 62, set: undefined, labels: { vault: "large" } })}\n`);
+  const card = await until(async () => (await shown()).works.find((work) => work.id === `${id}~alpha` && work.star) ?? null, 20_000);
+  // The card's line is the headline's own reading, never dated by the newer reading of one label.
+  expect(card.star).toEqual({ outcome: "Search median", unit: "ms", now: { value: 84, of: null, where: "ci", at: "2026-11-25T00:00:00Z" as Instant, change: null, verdict: "unclear" }, values: [84], split: [], more: 0, due: null });
+  const detail = (await (await get(`/api/work/${encodeURIComponent(`${id}~alpha`)}`)).json()) as WorkDetail;
+  expect(detail.outcomes?.[0]).toMatchObject({ name: "Search median", group: "Speed", star: true, readings: [reading, { value: 62, labels: { vault: "large" } }] });
+}, 30_000);

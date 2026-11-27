@@ -3,7 +3,7 @@
 // A hub dates only what it sees happen to a page. So a copy of the sample pages is given the history a hub
 // would have written had their Shipped lines and their asks arrived a few at a time over the last days, and
 // what is live had gone live a day ago. The hub is started on that copy with no harness read.
-import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { pageEvents, writeJournal } from "../src/core/journal.ts";
@@ -24,6 +24,14 @@ const home = mkdtempSync(join(tmpdir(), "progress-demo-"));
 process.on("exit", () => rmSync(home, { recursive: true, force: true }));
 // The pages and what they show, without the history a hub run on the samples themselves left there.
 cpSync(join(import.meta.dir, "..", "test", "pages"), home, { recursive: true, filter: (from) => !/^\.(?!sessions$)/.test(basename(from)) });
+// The newest key change of any work, so all of them keep the days between them.
+const changeTimes = readdirSync(home).flatMap((work) => {
+  const file = join(home, work, "changes.jsonl");
+  return existsSync(file) ? readFileSync(file, "utf8").trim().split("\n").map((line) => Date.parse((JSON.parse(line) as { at: string }).at)) : [];
+});
+const morning = new Date(now);
+morning.setHours(9, 30, 0, 0);
+const changeShift = changeTimes.length ? Math.round((Math.min(morning.getTime(), now - HOUR) - Math.max(...changeTimes)) / (24 * HOUR)) * 24 * HOUR : 0;
 for (const work of readdirSync(home)) {
   const file = join(home, work, "progress.md");
   const page = parsePage(readFileSync(file, "utf8"), join(home, work));
@@ -45,6 +53,22 @@ for (const work of readdirSync(home)) {
   writeFileSync(join(home, work, ".history.jsonl"), writeJournal(events));
   // The page was last written at the last step.
   utimesSync(file, new Date(now - AGO[LAST]!), new Date(now - AGO[LAST]!));
+  // Its readings are moved in time together, the newest to two hours ago, and their due dates by whole days.
+  const outcomes = join(home, work, "outcomes.jsonl");
+  if (existsSync(outcomes)) {
+    const lines = readFileSync(outcomes, "utf8").trim().split("\n").map((line) => JSON.parse(line) as { at: string; due?: string });
+    const shift = now - 2 * HOUR - Math.max(...lines.map((line) => Date.parse(line.at)));
+    const days = Math.round(shift / (24 * HOUR));
+    const moved = lines.map((line) => ({ ...line, at: new Date(Date.parse(line.at) + shift).toISOString(), ...(line.due ? { due: new Date(Date.parse(line.due) + days * 24 * HOUR).toISOString().slice(0, 10) } : {}) }));
+    writeFileSync(outcomes, moved.map((line) => JSON.stringify(line)).join("\n") + "\n");
+  }
+  // Its key changes are moved by the same whole days for every work, so the newest of all is from the last day.
+  const changes = join(home, work, "changes.jsonl");
+  if (existsSync(changes)) {
+    const lines = readFileSync(changes, "utf8").trim().split("\n").map((line) => JSON.parse(line) as { at: string });
+    const moved = lines.map((line) => ({ ...line, at: new Date(Date.parse(line.at) + changeShift).toISOString() }));
+    writeFileSync(changes, moved.map((line) => JSON.stringify(line)).join("\n") + "\n");
+  }
 }
 
 const todo = (text: string, ago: number, more: Partial<Todo> = {}): Todo => ({ id: crypto.randomUUID(), text, description: "", work: null, project: null, addedAt: new Date(now - ago).toISOString() as Todo["addedAt"], doneAt: null, ...more });

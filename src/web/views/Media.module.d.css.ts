@@ -1,6 +1,14 @@
 // Written by scripts/css-types.ts from the module beside it. Run `bun run css-types` after changing its classes.
 declare const classes: {
   readonly artifact: string;
+  readonly doc: string;
+  readonly docFailed: string;
+  readonly folderFile: string;
+  readonly folderFiles: string;
+  readonly folderHead: string;
+  readonly folderName: string;
+  readonly folderOut: string;
+  readonly folderWhen: string;
   readonly in: string;
   readonly layout: string;
   readonly tile: string;
@@ -13,6 +21,7 @@ declare const classes: {
   readonly tileWork: string;
   readonly viewer: string;
   readonly viewerCap: string;
+  readonly viewerDoc: string;
   readonly viewerFit: string;
   readonly viewerHead: string;
   readonly viewerMeta: string;

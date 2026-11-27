@@ -4,6 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { WorkId } from "../src/core/types.ts";
 import { DiskStore } from "../src/stores/disk/index.ts";
+import { OUTCOMES_BUDGET } from "../src/core/outcomes.ts";
+import { diffOfFiles } from "../src/core/ddl.ts";
+import { MOST_ROW_BYTES } from "../src/central/protocol.ts";
 import { CHILD, fixture, ROOT } from "./t3-fixture.ts";
 
 const main = join(import.meta.dir, "..", "src", "main.ts");
@@ -803,7 +806,7 @@ test("a page the commands wrote has none of these notes", () => {
 
 test("the sample pages check clean", () => {
   const env = { PROGRESS_HOME: join(import.meta.dir, "pages"), HOME: mkdtempSync(join(tmpdir(), "progress-cli-")) };
-  for (const work of ["search-speed", "sync-reliability"]) expect(progress(["check", work], env).out).toContain("Nothing to fix.");
+  for (const work of ["search-speed", "sync-reliability", "tool-failures", "signup-growth"]) expect(progress(["check", work], env).out).toContain("Nothing to fix.");
 });
 
 test("a first line over the limit is refused with the command that splits it, ready to run", () => {
@@ -853,4 +856,201 @@ test("a refused --under, a reword to a taken name and a move within a section ch
   expect(run("move", "retry queue", "doing").err).toContain('is already under In progress. To change its words, progress reword "<its words>" "<its new first line>"');
   expect(run("reword", "retry queue").err).toContain("Name the line and give its new first line");
   expect(read()).toBe(WORK);
+});
+
+test("measure appends a stamped reading, keeps the first unit, and check names what the readings lack", () => {
+  const { home, env } = setup();
+  const thread = { ...env, T3CODE_THREAD_ID: "thread-a" };
+  progress(["new", "Tool failures"], thread);
+  const file = join(home, "tool-failures", "outcomes.jsonl");
+  const first = progress(["measure", "Failed tool calls", "3.51%", "--where", "prod", "--star", "--lower", "--target", "2%", "--n", "300,248 tool calls"], thread);
+  expect(first.code).toBe(0);
+  expect(first.out).toContain('"Failed tool calls" is the work\'s north star now.');
+  const [line] = readFileSync(file, "utf8").split("\n");
+  const reading = JSON.parse(line ?? "");
+  expect(Date.now() - Date.parse(reading.at)).toBeLessThan(60_000);
+  expect(reading).toMatchObject({ by: "t3:thread-a", outcome: "Failed tool calls", value: 3.51, where: "prod", n: 300248, set: { unit: "%", better: "lower", target: 2, star: true, counted: "tool calls" } });
+
+  // A number in another unit, or with nowhere it was measured, is refused and nothing is written.
+  const before = readFileSync(file, "utf8");
+  const other = progress(["measure", "Failed tool calls", "29ms", "--where", "prod"], thread);
+  expect(other.code).toBe(1);
+  expect(other.err).toContain('"Failed tool calls" is measured in %, and 29ms is in ms');
+  expect(progress(["measure", "Failed tool calls", "2.96%"], thread).err).toContain("Say where 2.96% was measured");
+  expect(readFileSync(file, "utf8")).toBe(before);
+
+  // The definition is sticky: a later reading writes only the number.
+  expect(progress(["measure", "Failed tool calls", "2.96%", "--where", "prod", "--window", "Nov 25 full day"], thread).code).toBe(0);
+  expect(JSON.parse(readFileSync(file, "utf8").split("\n")[1] ?? "").set).toBeUndefined();
+  expect(progress(["measure", "Cohort kept", "--due", "2020-01-02", "--by", "client=web"], thread).code).toBe(0);
+
+  const check = progress(["check", "tool-failures"], env).out;
+  expect(check).toContain("North star: Failed tool calls, 2.96% in Prod");
+  expect(check).toContain('the north star "Failed tool calls" does not say how it is measured');
+  expect(check).toContain('the latest prod reading of "Failed tool calls" has no --source');
+  expect(check).toContain('a reading of "Cohort kept" was due on 2020-01-02');
+});
+
+test("measures run at once each add their line", async () => {
+  const { home, env } = setup();
+  progress(["new", "Search speed"], env);
+  const { T3CODE_THREAD_ID: _, ...rest } = process.env;
+  const runs = Array.from({ length: 6 }, (_, i) => Bun.spawn(["bun", main, "measure", "Search median", `${80 + i}ms`, "--where", "ci", "--work", "search-speed"], { env: { ...rest, ...env }, cwd: tmpdir(), stderr: "pipe" }));
+  expect(await Promise.all(runs.map((run) => run.exited))).toEqual([0, 0, 0, 0, 0, 0]);
+  const lines = readFileSync(join(home, "search-speed", "outcomes.jsonl"), "utf8").trim().split("\n");
+  expect(lines.map((line) => JSON.parse(line).value).sort()).toEqual([80, 81, 82, 83, 84, 85]);
+});
+
+test("a rate is fixed by its first reading, read in percent, and checked against its whole", () => {
+  const { home, env } = setup();
+  const thread = { ...env, T3CODE_THREAD_ID: "thread-a" };
+  progress(["new", "Signup growth"], thread);
+  const file = join(home, "signup-growth", "outcomes.jsonl");
+  const run = (...args: string[]) => progress(["measure", "Active", ...args], thread);
+  expect(run("244", "--of", "1114", "--where", "prod", "--star", "--higher", "--target", "25%").code).toBe(0);
+  expect(JSON.parse(readFileSync(file, "utf8").split("\n")[0] ?? "")).toMatchObject({ value: 244, of: 1114, set: { target: 25 } });
+  const before = readFileSync(file, "utf8");
+  expect(run("250", "--where", "prod").err).toContain('"Active" is a rate');
+  expect(run("1", "--of", "0", "--where", "prod").err).toContain("--of is the whole that was counted");
+  expect(run("3", "--of", "2", "--where", "prod").err).toContain("a whole number from 0 to 2");
+  expect(readFileSync(file, "utf8")).toBe(before);
+  expect(run("260", "--of", "1100", "--from", "21.9%", "--where", "prod", "--window", "Nov 9 week", "--source", "q.sql").code).toBe(0);
+  // check tells the rate, as the hub does, never the count alone.
+  expect(progress(["check", "signup-growth"], env).out).toContain("North star: Active, 23.64% in Prod");
+
+  expect(progress(["measure", "Plain", "20", "--where", "prod"], thread).code).toBe(0);
+  expect(progress(["measure", "Plain", "5", "--of", "10", "--where", "prod"], thread).err).toContain('"Plain" is a plain number');
+});
+
+test("an outcome whose definition is more than a work's outcomes may take is left out, and check names it", () => {
+  const { home, env } = setup();
+  progress(["new", "Big how"], env);
+  const line = (outcome: string, value: number, more: object = {}) => JSON.stringify({ at: `2026-01-0${value}T00:00:00Z`, outcome, value, where: "ci", ...more });
+  writeFileSync(join(home, "big-how", "outcomes.jsonl"), [line("Kept", 1), line("Huge", 2, { set: { how: "h".repeat(OUTCOMES_BUDGET) } }), line("Huge", 3), line("Kept", 4), ""].join("\n"));
+  // A long text is the agent's to give: measure writes it, and the budget decides what the page carries.
+  expect(progress(["measure", "Kept", "5", "--where", "ci", "--work", "big-how", "--note", "n".repeat(2000)], env).code).toBe(0);
+  const out = progress(["check", "big-how"], env).out;
+  expect(out).toContain(`lines 2 and 3 of outcomes.jsonl are left out: "Huge", with its definition and each line's first reading, is past the 4 MB a work's outcomes may take`);
+  const hub = new DiskStore(home, [], async () => null);
+  hub.refresh(new Date(Date.now() + 60_000));
+  expect(hub.detail("big-how" as WorkId)?.outcomes?.map((outcome) => [outcome.name, outcome.readings.map((r) => r.value)])).toEqual([["Kept", [1, 4, 5]]]);
+});
+
+test("check names each line of outcomes.jsonl left out, and why, and the hub's numbers stay numbers", () => {
+  const { home, env } = setup();
+  progress(["new", "Hand edits"], env);
+  const line = (more: object) => JSON.stringify({ at: "2026-01-01T00:00:00Z", where: "prod", ...more });
+  writeFileSync(
+    join(home, "hand-edits", "outcomes.jsonl"),
+    [line({ outcome: "Active", value: 5, of: 10 }), line({ outcome: "Gone", value: 1, of: 0 }), line({ outcome: "Active", value: 7 }), "{not json", line({ outcome: "Active", value: 3, of: 2 }), ""].join("\n"),
+  );
+  const out = progress(["check", "hand-edits"], env).out;
+  expect(out).toContain("lines 2 and 5 of outcomes.jsonl are left out: its count is not from 0 to its --of");
+  expect(out).toContain('line 3 of outcomes.jsonl is left out: "Active" is a rate, and this line has no --of');
+  expect(out).toContain("line 4 of outcomes.jsonl is left out: it is not JSON");
+  const hub = new DiskStore(home, [], async () => null);
+  hub.refresh(new Date(Date.now() + 60_000));
+  const detail = hub.detail("hand-edits" as WorkId);
+  expect(detail?.outcomes?.map((outcome) => [outcome.name, outcome.readings.map((r) => r.value)])).toEqual([["Active", [50]]]);
+});
+
+test("a rate redefined as a percent measured directly keeps its unit, and takes the next reading in it", () => {
+  const { home, env } = setup();
+  progress(["new", "Kept rate"], env);
+  const run = (...args: string[]) => progress(["measure", "Kept", ...args, "--work", "kept-rate"], env);
+  expect(run("5", "--of", "50", "--where", "prod", "--how", "counted").code).toBe(0);
+  expect(run("7%", "--where", "prod", "--how", "from the dashboard").out).toContain("7%");
+  const next = run("7%", "--where", "prod");
+  expect(next.err).toBe("");
+  expect(next.code).toBe(0);
+  const hub = new DiskStore(home, [], async () => null);
+  hub.refresh(new Date(Date.now() + 60_000));
+  expect(hub.detail("kept-rate" as WorkId)?.outcomes?.map((outcome) => [outcome.unit, outcome.readings.map((r) => r.value)])).toEqual([["%", [7, 7]]]);
+});
+
+test("a prod reading is told every flag it lacks to be checked, and a source holds for the readings after it", () => {
+  const { env } = setup();
+  progress(["new", "Checkable"], env);
+  const run = (...args: string[]) => progress(["measure", ...args, "--work", "checkable"], env);
+  expect(run("Bare", "5ms", "--where", "prod").out).toContain("checkable with its --window and --source. Give them next time.");
+  expect(progress(["check", "checkable"], env).out).toContain('the latest prod reading of "Bare" has no --window or --source');
+  expect(run("Kept", "5ms", "--where", "prod", "--how", "p50 of the day", "--source", "q.sql", "--window", "Nov 25").out).not.toContain("checkable with");
+  expect(run("Kept", "6ms", "--where", "prod", "--window", "Nov 26").out).not.toContain("checkable with");
+  expect(run("Kept", "7ms", "--where", "prod").out).toContain("checkable with its --window. Give it next time.");
+  expect(progress(["check", "checkable"], env).out).toContain('the latest prod reading of "Kept" has no --window,');
+});
+
+test("measure --help prints its flags, and writes nothing", () => {
+  const { env } = setup();
+  const help = progress(["measure", "--help"], env);
+  expect(help.code).toBe(0);
+  expect(help.out).toContain("--where prod|ci|local|guess");
+  expect(help.out).toContain("--source <file|link>");
+});
+
+test("change db keeps a pull request's migrations, a second run replaces them, and the hub shows what their SQL does", async () => {
+  const { dir, home, env } = setup();
+  const thread = { ...env, T3CODE_THREAD_ID: "thread-a" };
+  progress(["new", "Routine waits"], thread);
+  // The files are given from where the agent works, and kept by the path given.
+  const repo = join(dir, "repo");
+  mkdirSync(join(repo, "db", "migrations"), { recursive: true });
+  writeFileSync(join(repo, "db", "migrations", "001_waits.sql"), "CREATE TABLE routine_waits (id uuid PRIMARY KEY, minutes integer NOT NULL DEFAULT 30);\n");
+  const { T3CODE_THREAD_ID: _, ...rest } = process.env;
+  const run = (args: string[]) => {
+    const result = Bun.spawnSync(["bun", main, "change", "db", ...args], { env: { ...rest, ...thread }, cwd: join(repo, "db") });
+    return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() };
+  };
+  const pr = "https://github.com/acme/kestrel/pull/412";
+  const first = run(["migrations/001_waits.sql", "--pr", pr, "--why", "Each routine waits this long for an offline computer"]);
+  expect(first.code).toBe(0);
+  expect(first.out).toContain("The hub reads: 1 new table.");
+
+  // Nothing is written without a pull request, a why, or a file that is there.
+  const file = join(home, "routine-waits", "changes.jsonl");
+  const before = readFileSync(file, "utf8");
+  expect(run(["migrations/001_waits.sql", "--why", "x"]).err).toContain("--pr <link>");
+  expect(run(["migrations/001_waits.sql", "--pr", pr]).err).toContain('--why "<why>"');
+  expect(run(["migrations/missing.sql", "--pr", pr, "--why", "x"]).err).toContain("There is no file at migrations/missing.sql");
+  expect(readFileSync(file, "utf8")).toBe(before);
+
+  // The pull request changed: the agent records it again, from its files tab, and the new SQL replaces the old.
+  writeFileSync(join(repo, "db", "migrations", "002_paused.sql"), "ALTER TABLE routines ADD COLUMN paused_at timestamptz;\nCREATE INDEX CONCURRENTLY routines_paused_idx ON routines (paused_at) WHERE paused_at IS NOT NULL;\n");
+  const again = run(["migrations/001_waits.sql", "migrations/002_paused.sql", "--pr", `${pr}/files`, "--why", "Routines wait for an offline computer, and can be paused", "--db", "Server"]);
+  expect(again.out).toContain("It replaces the one recorded at");
+  expect(again.out).toContain("The hub reads: 1 new table, 1 column added, 1 index added.");
+
+  const hub = new DiskStore(home, [], async () => null);
+  hub.refresh(new Date(Date.now() + 60_000));
+  expect(hub.state().works[0]?.latestChange).toBeDefined();
+  const [change] = hub.detail("routine-waits" as WorkId)?.changes ?? [];
+  expect(change).toMatchObject({ by: "t3:thread-a", kind: "db", why: "Routines wait for an offline computer, and can be paused", db: "Server", pull: null });
+  expect(change?.files.map((f) => f.path)).toEqual(["migrations/001_waits.sql", "migrations/002_paused.sql"]);
+  // The hub keeps the SQL as written. What it does is read from it, wherever the change is shown.
+  const diff = diffOfFiles(change?.files ?? []);
+  expect(diff.tables.map((table) => [table.name, table.mark, table.rows.map((row) => `${row.mark} ${row.kind} ${row.name} ${row.detail} ${row.tags.join(", ")}`.trim())])).toEqual([
+    ["routine_waits", "added", ["added column id uuid primary key", "added column minutes integer not null, default 30"]],
+    ["routines", "changed", ["added column paused_at timestamptz", "added index routines_paused_idx (paused_at) concurrently, where paused_at IS NOT NULL"]],
+  ]);
+});
+
+test("a work's key changes never make its page more than a central hub keeps: the newest that fit are shown, past one too large", () => {
+  const { home, env } = setup();
+  progress(["new", "Big changes"], env);
+  const change = (n: number, bytes: number) => JSON.stringify({ at: `2026-01-${String(n).padStart(2, "0")}T00:00:00Z`, kind: "db", pr: `https://github.com/acme/app/pull/${n}`, why: `Change ${n}`, files: [{ path: "data.sql", sql: `-- ${"a".repeat(bytes)}` }] });
+  // Written by hand past the command's limit: the newest is larger than a page may be, and the rest fill more than one.
+  const lines = [...Array.from({ length: 60 }, (_, i) => change(i + 1, 127 * 1024)), change(61, 7 * 1024 * 1024), "not json", JSON.stringify({ at: "2026-02-01T00:00:00Z", kind: "db", pr: "mailto:someone@example.com", why: "x", files: [{ path: "a.sql", sql: "" }] })];
+  writeFileSync(join(home, "big-changes", "changes.jsonl"), lines.join("\n"));
+  const hub = new DiskStore(home, [], async () => null);
+  hub.refresh(new Date(Date.now() + 60_000));
+  const detail = hub.detail("big-changes" as WorkId);
+  expect(new TextEncoder().encode(JSON.stringify(detail)).byteLength).toBeLessThan(MOST_ROW_BYTES);
+  const kept = detail?.changes?.map((c) => c.why) ?? [];
+  // The newest that fits is shown, though the one after it doesn't fit.
+  expect(kept[0]).toBe("Change 60");
+  expect(kept.length).toBeGreaterThan(30);
+  expect(kept.length).toBeLessThan(60);
+  expect(detail?.notes).toContain(`${61 - kept.length} key changes were left out: with the rest of the page, they are more than a central hub keeps for one work.`);
+  // A line that is not JSON, and one whose pull request is not a web link, are left out and counted.
+  expect(detail?.notes).toContain("2 lines of changes.jsonl could not be read and were left out.");
 });

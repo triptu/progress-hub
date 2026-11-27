@@ -1,0 +1,355 @@
+/*
+ * An outcome's charts, drawn by hand. Colour carries meaning only: blue is the line being read, green better,
+ * orange worse, and a project colour tells one label's line from another.
+ */
+.chart {
+  margin: var(--s4) 0 0;
+}
+
+.plot {
+  position: relative;
+}
+
+.svg {
+  display: block;
+  overflow: visible;
+  touch-action: pan-y;
+}
+
+.grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.tick {
+  fill: var(--muted);
+  font: var(--t-small);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The target: a grey dotted rule, named in the scale's column. Dashes are Local's and green is better's. */
+.target {
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  stroke-dasharray: 0 4;
+  stroke-linecap: round;
+}
+
+.targetLabel {
+  fill: var(--text);
+  font: var(--t-small);
+  font-weight: var(--medium);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A change that took effect: a thin rule with its name on top. */
+.change {
+  stroke: var(--faint);
+  stroke-width: 1;
+}
+
+/* Edged in the ground's colour, so a rule that runs under a label never crosses its words. */
+.changeLabel {
+  fill: var(--muted);
+  font: var(--t-small);
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+/* Other shipped work that went live: a short tick on the axis. */
+.live {
+  stroke: var(--faint);
+  stroke-width: 1.5;
+}
+
+/* The legend draws a change and a release as the chart does: a rule on the axis it rises from. */
+.keyBase {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.keyPin {
+  fill: var(--faint);
+}
+
+.guide {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+/*
+ * A line. A place's is blue, CI's purple, a local one dashed with open dots and a guess faint and dotted. A label's
+ * is its project colour, and faint when it counted too few.
+ */
+.line {
+  --line-c: var(--c, var(--accent));
+  transition: opacity var(--fast) var(--ease);
+}
+
+.line[data-where="ci"] {
+  --line-c: var(--merged);
+}
+
+.line[data-where="local"] {
+  --line-c: var(--muted);
+}
+
+.line[data-where="guess"] {
+  --line-c: var(--faint);
+}
+
+.line[data-small] {
+  --line-c: var(--faint);
+}
+
+.line[data-lit="off"] {
+  opacity: 0.18;
+}
+
+.stroke {
+  fill: none;
+  stroke: var(--line-c);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.line[data-lit="on"] .stroke {
+  stroke-width: 2.75;
+}
+
+.dot {
+  fill: var(--line-c);
+  stroke: var(--bg);
+  stroke-width: 1.5;
+}
+
+.line[data-where="local"] .stroke {
+  stroke-dasharray: 4 3;
+}
+
+.line[data-where="guess"] .stroke {
+  stroke-dasharray: 1 3;
+}
+
+.line[data-where="local"] .dot,
+.line[data-where="guess"] .dot {
+  fill: var(--bg);
+  stroke: var(--line-c);
+}
+
+.line[data-where="guess"] .dot {
+  stroke-dasharray: 1 1.5;
+}
+
+/* Too few counted: thin and faint, behind the other lines. Dashes stay Local's. */
+.line[data-small] .stroke {
+  stroke-width: 1.25;
+}
+
+.endLabel {
+  fill: var(--line-c);
+  font: var(--t-small);
+  font-weight: var(--medium);
+}
+
+/* The values at the place under the pointer, at once, beside the guide on the side with room. */
+.tip {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--s1) var(--s2);
+  border-radius: var(--r-s);
+  background: var(--float);
+  box-shadow: var(--float-shadow);
+  color: var(--muted);
+  font: var(--t-small);
+  white-space: nowrap;
+  transform: translateX(10px);
+  pointer-events: none;
+}
+
+.tip[data-side="left"] {
+  transform: translateX(calc(-100% - 10px));
+}
+
+.tip b {
+  color: var(--text);
+  font-weight: var(--medium);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s4);
+  margin-top: var(--s2);
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.key svg {
+  overflow: visible;
+}
+
+/* ---------------------------------------------------------------- A line per label
+
+/* The rows under the lines, which are their legend: a row lights its line. */
+.rows {
+  display: grid;
+  margin-top: var(--s2);
+}
+
+.row {
+  grid-template-columns: minmax(0, 1fr) auto 5rem;
+  gap: var(--s3);
+  min-height: var(--hit);
+  padding-block: var(--s1);
+}
+
+.row[data-lit="off"] {
+  color: var(--muted);
+}
+
+.row[data-small] .rowLabel,
+.row[data-small] .rowValue b {
+  color: var(--muted);
+}
+
+.rowLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.swatch {
+  flex: none;
+  width: 10px;
+  height: 3px;
+  border-radius: 1px;
+  background: var(--c);
+}
+
+.row[data-small] .swatch {
+  background: var(--faint);
+}
+
+.rowValue {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.counts {
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.rowChange {
+  text-align: right;
+}
+
+/* ---------------------------------------------------------------- Small parts the tab and Home share */
+
+.spark {
+  flex: none;
+  overflow: visible;
+}
+
+.spark[data-size="m"] {
+  width: 64px;
+  height: 18px;
+}
+
+.spark[data-size="s"] {
+  width: 44px;
+  height: 14px;
+}
+
+.spark polyline {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.spark circle {
+  fill: var(--muted);
+}
+
+.spark[data-verdict="better"] polyline {
+  stroke: var(--working);
+}
+
+.spark[data-verdict="better"] circle {
+  fill: var(--working);
+}
+
+.spark[data-verdict="worse"] polyline {
+  stroke: var(--needs);
+}
+
+.spark[data-verdict="worse"] circle {
+  fill: var(--needs);
+}
+
+.delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.delta svg {
+  width: 10px;
+  height: 10px;
+}
+
+.delta[data-verdict="better"] {
+  color: var(--working);
+}
+
+.delta[data-verdict="worse"] {
+  color: var(--needs);
+}
+
+/* Where a number was measured. Solid for real use, outlined for one machine, dashed for a guess. */
+.where {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: var(--r-s);
+  background: var(--tile);
+  color: var(--text);
+  font: var(--t-small);
+  font-weight: var(--medium);
+  white-space: nowrap;
+}
+
+/* Outlined, as a tag is, with nothing a button has: no fill, and no change under the pointer. */
+.where[data-where="local"] {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--muted);
+}
+
+.where[data-where="guess"] {
+  background: none;
+  outline: 1px dashed var(--faint);
+  outline-offset: -1px;
+  color: var(--muted);
+}

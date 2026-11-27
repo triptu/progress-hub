@@ -1,6 +1,7 @@
 import { statSync } from "node:fs";
 import { join } from "node:path";
-import { localPath, mediaKind } from "../../core/parse.ts";
+import { mediaKind } from "../../core/kinds.ts";
+import { localPath } from "../../core/parse.ts";
 import { imageSize } from "./image-size.ts";
 import type { Html, WorkId } from "../../core/types.ts";
 
@@ -58,7 +59,18 @@ export function renderMarkdown(markdown: string, work: WorkId, dir?: string): Ht
         });
       },
     })
-    .on("a[href]", local("href"))
+    .on("a[href]", {
+      element(el) {
+        const href = el.getAttribute("href") ?? "";
+        const path = localPath(href);
+        // A file elsewhere on the machine. The hub serves only the work's folder, and the path as an address on
+        // the hub opens its Home, so the link keeps its words and says where the file is.
+        if (path !== null && /^(\/(?!\/)|~)/.test(path)) {
+          el.removeAttribute("href");
+          el.setAttribute("title", `Outside the work's folder, so the hub can't open it: ${href}`);
+        } else el.setAttribute("href", rewrite(work, href));
+      },
+    })
     .on("video[src], audio[src], source[src], iframe[src]", local("src"))
     .on("video[poster]", local("poster"))
     .on("img[src]", {

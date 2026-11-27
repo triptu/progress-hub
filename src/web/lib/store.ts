@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from "react";
 import type { HubState, Media, WorkDetail, WorkId } from "../../core/types.ts";
+import type { WorkChange } from "../../core/changes.ts";
 import { nameWorks } from "./route.ts";
 
 /**
@@ -162,6 +163,9 @@ export function takeOver(paths: readonly string[]): boolean {
 
 /** Fetches the state now, and resolves once an answer newer than this call has arrived. */
 export const refreshHub = () => refresh("/api/state");
+
+/** Every work's key changes, newest first, asked for only while a screen shows them. */
+export const useChanges = (wanted: boolean) => useResource<WorkChange[]>(wanted ? "/api/changes" : null);
 
 export const useWork = (id: WorkId | null) => useResource<WorkDetail>(id ? `/api/work/${encodeURIComponent(id)}` : null);
 

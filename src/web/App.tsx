@@ -9,28 +9,31 @@ import { devicesOf } from "./lib/devices.ts";
 import { useDismissed } from "./lib/dismissed.ts";
 import { groupFeed, rowMatches, rowsOf, rowsSince } from "./lib/feed.ts";
 import { useMarks, useUnsavedMark } from "./lib/marks.ts";
-import { byKind, mediaDays, mediaItems } from "./lib/media.ts";
+import { byKind, folderItems, mediaDays, mediaItems, opensInHub } from "./lib/media.ts";
 import type { MediaItem, MediaKind } from "./lib/media.ts";
 import { matches, needKey, needText } from "./lib/needs.ts";
 import { usePersisted } from "./lib/persist.ts";
 import { keepLooks, projectLooks, readKeptLooks } from "./lib/project.ts";
 import { close, navigate, placeToReturnTo, routeHref, showMedia, TABS, useRoute } from "./lib/route.ts";
 import type { Tab } from "./lib/route.ts";
-import { listenForChanges, useHub, useMedia, useReachable, useWork } from "./lib/store.ts";
+import { listenForChanges, useChanges, useHub, useMedia, useReachable, useWork } from "./lib/store.ts";
+import { changeDays } from "./lib/changes.ts";
 import { useTheme } from "./lib/theme.ts";
 import { useNow } from "./lib/time.ts";
-import { BOARD_SEEN, isUnread, markSeen, useSeen } from "./lib/unread.ts";
+import { BOARD_SEEN, CHANGES_SEEN, isUnread, markSeen, outcomesSeen, useSeen } from "./lib/unread.ts";
 import { splitWorks, workMatches } from "./lib/works.ts";
 import { Board } from "./views/Board.tsx";
 import { Devices } from "./views/Devices.tsx";
 import { Empty } from "./views/Empty.tsx";
 import { Feed } from "./views/Feed.tsx";
 import { Home } from "./views/Home.tsx";
+import { Outcomes } from "./views/Outcomes.tsx";
+import { Changes } from "./views/Changes.tsx";
 import { Artifacts, Media, Viewer } from "./views/Media.tsx";
 import { Todos } from "./views/Todos.tsx";
 import { todosFor } from "./lib/todos.ts";
-import { Link, ProjectLooks } from "./views/parts.tsx";
-import { Resizer, Sidebar } from "./views/Sidebar.tsx";
+import { Link, ProjectLooks, Resizer } from "./views/parts.tsx";
+import { Sidebar } from "./views/Sidebar.tsx";
 import { Goal, WorkHead, WorkPage } from "./views/WorkPage.tsx";
 import s from "./App.module.css";
 
@@ -43,9 +46,11 @@ const readOpen = (stored: unknown) => stored === true;
 const readShown = (stored: unknown) => stored !== false;
 
 /** The tabs are the same for everything and for one work. Home is where each starts: every ongoing work, or the work's own page. */
-const TAB_LABEL: Record<Tab, string> = { main: "Home", board: "Board", activity: "Activity", media: "Media" };
+const TAB_LABEL: Record<Tab, string> = { main: "Home", board: "Board", activity: "Activity", media: "Media", changes: "Key changes", outcomes: "Outcomes" };
 
 const later = (a: Instant, b: Instant): Instant => (Date.parse(a) > Date.parse(b) ? a : b);
+/** The latest of some times, or null with none. */
+const latestOf = (times: readonly (Instant | undefined)[]): Instant | null => times.reduce<Instant | null>((a, b) => (b === undefined ? a : a === null ? b : later(a, b)), null);
 
 export function App() {
   const route = useRoute();
@@ -105,12 +110,15 @@ export function App() {
   const search = useRef<HTMLInputElement>(null);
 
   useEffect(listenForChanges, []);
-  // A picture in a page opens large over the hub, where it is, and not in a tab of its own. A click with a key held still opens the file.
+  // A picture in a page opens large over the hub, where it is, and not in a tab of its own, and so does a Markdown
+  // document the hub lists. A click with a key held still opens the file.
+  const listedDocs = useRef<ReadonlySet<string>>(new Set());
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      const src = event.target instanceof Element ? event.target.closest("a.fig")?.getAttribute("href") : null;
-      if (!src?.startsWith("/files/")) return;
+      const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
+      const src = link?.getAttribute("href")?.replace(/[?#].*$/, "") ?? "";
+      if (!src.startsWith("/files/") || !(link?.matches(".fig") || listedDocs.current.has(src))) return;
       event.preventDefault();
       showMedia(src);
     };
@@ -163,8 +171,37 @@ export function App() {
   useEffect(() => {
     if (onBoard && newest) markSeen(BOARD_SEEN, newest);
   }, [onBoard, newest]);
+  const onOutcomes = workId !== null && route.tab === "outcomes";
+  const outcomesSeenBefore = useMemo(() => (workId ? (seen.works[outcomesSeen(workId)] ?? seen.since) : seen.since), [workId, onOutcomes]);
+
+  // Key changes: the newest one here, across everything or in the open work, and the newest the tab had shown before this visit.
+  const onChanges = route.tab === "changes";
+  const newestChange = useMemo(() => latestOf((workId === null ? (works ?? []) : summary ? [summary] : []).map((work) => work.latestChange)), [works, summary, workId]);
+  const changesSeenBefore = useMemo(() => seen.works[CHANGES_SEEN] ?? seen.since, [workId, onChanges]);
+  const changesWaiting = newestChange !== null && Date.parse(newestChange) > Date.parse(seen.works[CHANGES_SEEN] ?? seen.since);
+  const allChanges = useChanges(workId === null && onChanges);
 
   const loaded = hub !== null && (workId === null || detail !== null);
+  // A work's Outcomes tab is there once it has readings, as its card says, and Key changes once there are some.
+  const ownDetail = detail?.summary.id === workId ? detail : null;
+  const tabs = TABS.filter((tab) => (tab !== "outcomes" || (summary?.outcomes ?? 0) > 0) && (tab !== "changes" || newestChange !== null));
+  // Outcomes on a work with no readings, from an address typed or kept from before, is that work's Home, and so is Key changes with none.
+  useEffect(() => {
+    if (route.tab === "outcomes" && workId !== null && ownDetail && !ownDetail.outcomes?.length) navigate(routeHref({ work: workId, focus: null }), true);
+    if (route.tab === "changes" && (workId === null ? works !== null : ownDetail !== null) && newestChange === null) navigate(routeHref({ work: workId, focus: null }), true);
+  }, [route.tab, workId, ownDetail, works, newestChange]);
+  // What the tab shows: everything's changes once they are in, or the open work's from its page.
+  const shownChanges = useMemo(() => {
+    if (!onChanges) return null;
+    if (workId === null) return allChanges;
+    return ownDetail ? (ownDetail.changes ?? []).map((change) => ({ ...change, work: ownDetail.summary.id, workTitle: ownDetail.summary.title, project: ownDetail.summary.project })) : null;
+  }, [onChanges, workId, allChanges, ownDetail]);
+  const changesDays = useMemo(() => (shownChanges ? changeDays(shownChanges, query, changesSeenBefore, now) : null), [shownChanges, query, changesSeenBefore, now]);
+  // Seen only once shown, up to the newest change on screen: a filter that shows none marks nothing.
+  const newestShown = useMemo(() => latestOf((changesDays ?? []).flatMap((day) => day.cards.map((card) => card.change.at))), [changesDays]);
+  useEffect(() => {
+    if (newestShown) markSeen(CHANGES_SEEN, newestShown);
+  }, [newestShown]);
   // Opening one of the media large, or a card of the board, keeps the screen where it was.
   const routeKey = routeHref({ work: route.work, tab: route.tab, focus: route.focus });
   useLayoutEffect(() => {
@@ -234,6 +271,7 @@ export function App() {
   );
   const boardHref = useCallback((card: string | null) => routeHref({ work: workId, tab: "board", card }), [workId]);
   const allMedia = useMemo(() => (media && works ? mediaItems(media, works, "") : null), [media, works]);
+  listedDocs.current = useMemo(() => new Set((allMedia ?? []).filter((item) => item.kind === "folder" || (item.kind === "file" && opensInHub(item))).map((item) => item.src)), [allMedia]);
   const workMedia = useMemo(() => allMedia?.filter((item) => item.work === workId) ?? NO_MEDIA, [allMedia, workId]);
   const [mediaKinds, setMediaKinds] = useState<ReadonlySet<MediaKind>>(new Set());
   // What the Media tab holds: this screen's media, narrowed to the kinds picked there and then to what the search matches.
@@ -273,6 +311,9 @@ export function App() {
         <Sidebar ongoing={works === null ? null : shownOngoing} settled={shownSettled} hasSettled={settled.length > 0} shown={sideShown || drawer} current={workId} searching={query.trim() !== ""} isUnread={unread} needs={openNeeds.length} settledOpen={settledOpen} onSettledOpen={setSettledOpen} now={now} />
         {sideShown ? (
           <Resizer
+            label="Sidebar width"
+            edge="end"
+            className={s.sideResizer}
             width={sideWidth}
             {...SIDE}
             onPreview={(width) => app.current?.style.setProperty("--side-w", `${width}px`)}
@@ -300,12 +341,13 @@ export function App() {
               progress
             </Link>
             <nav className={s.tabs} aria-label={workId === null ? "Everything" : (summary?.title ?? "Work")}>
-              {TABS.map((tab) => (
+              {tabs.map((tab) => (
                 <Link key={tab} href={routeHref({ work: workId, tab })} className={s.tab} current={route.tab === tab}>
                   {/* The dot hangs off the word's corner and takes no room, so a tab is as wide with it as without, and its word stays in the middle. */}
                   <span className={s.tabName}>
                     {TAB_LABEL[tab]}
                     {tab === "board" && waiting > 0 ? <span className={s.tabDot} role="img" aria-label={waiting === 1 ? "1 needs you" : `${waiting} need you`} title={waiting === 1 ? "1 needs you" : `${waiting} need you`} /> : null}
+                    {tab === "changes" && changesWaiting && !onChanges ? <span className={s.tabDot} data-kind="new" role="img" aria-label="New since you last looked" title="New since you last looked" /> : null}
                   </span>
                 </Link>
               ))}
@@ -384,6 +426,11 @@ export function App() {
         );
       case "media":
         return mediaView(null);
+      case "changes":
+        return <Changes days={changesDays} query={query.trim()} scope={null} />;
+      case "outcomes":
+        // Only a work has one. An address for everything's never reaches here: it reads as Home.
+        return null;
     }
   }
 
@@ -398,12 +445,15 @@ export function App() {
   /** One of the media shown large, over the screen it was opened from, with its neighbours in that screen's list. */
   function viewer() {
     // On the Media tab the arrows step through what its filters show. Anywhere else they stay in the work the picture is from.
-    // A document opens in a tab of its own, so the viewer steps over it.
+    // A document the hub can't show opens in a tab of its own, so the viewer steps over it.
     const from = route.tab === "media" || workId !== null ? null : (allMedia?.find((item) => item.src === route.open)?.work ?? null);
-    const shown = (route.tab === "media" ? (shownMedia ?? []) : workId !== null ? workMedia : (allMedia ?? []).filter((item) => item.work === from)).filter((item) => item.kind !== "file");
-    const at = route.open === null ? -1 : shown.findIndex((item) => item.src === route.open);
-    const item = shown[at];
-    return item ? <Viewer item={item} prev={shown[at - 1] ?? null} next={shown[at + 1] ?? null} at={at + 1} of={shown.length} onMove={moveMedia} onClose={closeMedia} now={now} /> : null;
+    const shown = (route.tab === "media" ? (shownMedia ?? []) : workId !== null ? workMedia : (allMedia ?? []).filter((item) => item.work === from)).filter(opensInHub);
+    // A file opened from a folder steps through that folder's files.
+    const folder = shown.some((item) => item.src === route.open) ? null : (allMedia ?? []).find((item) => item.kind === "folder" && item.files?.some((file) => file.src === route.open));
+    const list = folder ? folderItems(folder).filter(opensInHub) : shown;
+    const at = route.open === null ? -1 : list.findIndex((item) => item.src === route.open);
+    const item = list[at];
+    return item ? <Viewer item={item} prev={list[at - 1] ?? null} next={list[at + 1] ?? null} at={at + 1} of={list.length} onMove={moveMedia} onClose={closeMedia} now={now} /> : null;
   }
 
   function work(id: WorkId) {
@@ -458,6 +508,25 @@ export function App() {
             {head}
             {goal}
           </>,
+        );
+      case "changes":
+        return (
+          <Changes days={changesDays} query={query.trim()} scope={summary.id}>
+            {head}
+            {goal}
+          </Changes>
+        );
+      case "outcomes":
+        return ownDetail?.outcomes?.length ? (
+          <Outcomes key={summary.id} detail={ownDetail} seenBefore={outcomesSeenBefore} onSeen={(at) => markSeen(outcomesSeen(summary.id), at)} now={now}>
+            {head}
+            {goal}
+          </Outcomes>
+        ) : (
+          <div className="wrap">
+            {head}
+            {goal}
+          </div>
         );
     }
   }

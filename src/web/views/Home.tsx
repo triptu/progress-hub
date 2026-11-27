@@ -1,11 +1,14 @@
 import type { ReactNode } from "react";
-import { CaretRightIcon, HandPalmIcon } from "@phosphor-icons/react";
+import { CaretRightIcon, HandPalmIcon, StarIcon } from "@phosphor-icons/react";
+import { WHERE_LABEL, type StarLine } from "../../core/outcomes.ts";
 import type { NeedEntry, WorkId, WorkSummary } from "../../core/types.ts";
 import { cardName } from "../lib/board.ts";
+import { amountText } from "../lib/outcomes.ts";
 import { needKey, needTitle } from "../lib/needs.ts";
 import { routeHref } from "../lib/route.ts";
 import { plural } from "../lib/works.ts";
 import { Ago, Avatar, Link, PhasePill, TryLinks, ViewHead, When } from "./parts.tsx";
+import { Delta, Sparkline } from "./Chart.tsx";
 import s from "./Home.module.css";
 
 interface HomeProps {
@@ -129,6 +132,7 @@ function Card(props: { readonly work: WorkSummary; readonly unread: boolean; rea
           {work.goal}
         </p>
       ) : null}
+      {work.star ? <StarRow work={work.id} star={work.star} now={props.now} /> : null}
       {work.summary ? <p className={s.cardSum}>{work.summary}</p> : null}
       <footer className={s.cardFoot}>
         {counts.length ? (
@@ -146,3 +150,33 @@ function Card(props: { readonly work: WorkSummary; readonly unread: boolean; rea
     </article>
   );
 }
+
+/** The work's north star in one line: where it stands, how far it moved, where and when it was measured, and its line. It opens the work's Outcomes. */
+function StarRow(props: { readonly work: WorkId; readonly star: StarLine; readonly now: number }) {
+  const { star } = props;
+  const now = star.now;
+  // A split star names its first few labels, and counts the rest, which are on its Outcomes.
+  const more = star.split.length - 3 + star.more;
+  const split = star.split.slice(0, 3).map((entry, i, shown) => `${entry.label} ${amountOf(entry, star.unit)}${i === shown.length - 1 && more > 0 ? ` and ${more} more` : ""}`);
+  const due = star.due ? `ready ${new Date(`${star.due}T12:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short" })}` : null;
+  return (
+    <Link href={routeHref({ work: props.work, tab: "outcomes" })} className={s.cardStar} title={[star.outcome, ...star.split.map((entry) => entry.label)].join(" · ")}>
+      <StarIcon weight="fill" aria-label="North star" className={s.starMark} />
+      <span className={s.starText}>
+        <span className={s.starName}>{star.outcome}</span>
+        {now ? (
+          <>
+            <b>{amountOf(now, star.unit)}</b>
+            <Delta verdict={now.verdict} change={now.change} />
+          </>
+        ) : null}
+        <span>{[...split, now ? WHERE_LABEL[now.where] : null, due].filter(Boolean).join(" · ")}</span>
+        {now ? <When at={now.at} now={props.now} /> : null}
+        {star.values.length > 1 ? <Sparkline values={star.values} verdict={now?.verdict ?? "unclear"} size="s" /> : null}
+      </span>
+    </Link>
+  );
+}
+
+/** A value on the card as the Outcomes tab writes it: a rate counted from too few is its counts. */
+const amountOf = (entry: { readonly value: number; readonly of: number | null }, unit: string) => amountText(entry.of === null ? { value: entry.value } : { value: entry.value, of: entry.of }, unit).main;

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 import { ArrowCounterClockwiseIcon, ArrowsInLineHorizontalIcon, ArrowsOutLineHorizontalIcon, BroadcastIcon, CaretLeftIcon, CaretRightIcon, CheckCircleIcon, CheckIcon, ChecksIcon, CircleDashedIcon, CircleHalfIcon, CircleIcon, GitPullRequestIcon, HandPalmIcon, HourglassSimpleIcon, RocketLaunchIcon, XIcon } from "@phosphor-icons/react";
 import type { Icon } from "@phosphor-icons/react";
@@ -16,7 +16,7 @@ import { nothingWaiting } from "../lib/needs.ts";
 import { close, laneAnchor, navigate, routeHref } from "../lib/route.ts";
 import { plural } from "../lib/works.ts";
 import { AskBody, AskThread } from "./Needs.tsx";
-import { Ago, Avatar, Fold, Important, Link, PrIcon, PrRow, RefChips, RichHtml, useProjectColour, ViewHead, When } from "./parts.tsx";
+import { Ago, Avatar, Fold, Important, Link, PrIcon, PrRow, RefChips, RESIZE_STEP, Resizer, RichHtml, useProjectColour, ViewHead, When } from "./parts.tsx";
 import s from "./Board.module.css";
 
 interface BoardProps {
@@ -53,8 +53,23 @@ export const LANE_ICON: Record<Lane, Icon> = { needs: HandPalmIcon, next: Circle
 /** How many cards a lane opens with. Shipped runs to hundreds on a long piece of work. */
 const LANE_FIRST = 24;
 
-/** The lane given the board's width, as this browser keeps it. */
-const readWide = (stored: unknown): Lane | null => LANES.find((lane) => lane === stored) ?? null;
+/**
+ * A choice each board keeps for itself in this browser, such as its widened lane: a work's own board by its id, the whole board by "".
+ * Setting it to null forgets it, so nothing is kept for a board with nothing chosen.
+ */
+function useBoardKept<T extends string>(key: string, board: string, valid: (value: unknown) => value is T): readonly [T | null, (value: T | null) => void] {
+  const [all, setAll] = usePersisted(key, (stored): Readonly<Record<string, T>> =>
+    stored !== null && typeof stored === "object" ? Object.fromEntries(Object.entries(stored).filter((entry): entry is [string, T] => valid(entry[1]))) : {},
+  );
+  const set = (value: T | null) => {
+    const { [board]: _, ...others } = all;
+    setAll(value === null ? others : { ...others, [board]: value });
+  };
+  return [all[board] ?? null, set];
+}
+
+const isLane = (value: unknown): value is Lane => LANES.some((lane) => lane === value);
+const isText = (value: unknown): value is string => typeof value === "string" && value !== "";
 
 /** Left and right step between the lanes' own controls, the switches and the folded lanes, without a walk through every card between them. */
 function stepLanes(event: { readonly key: string; readonly currentTarget: HTMLElement; preventDefault(): void }) {
@@ -66,6 +81,54 @@ function stepLanes(event: { readonly key: string; readonly currentTarget: HTMLEl
   event.preventDefault();
   next.focus();
 }
+
+/** A length the stylesheet names, such as `--lane-min`, in pixels. The tokens are written in px and rem. */
+function lengthOf(element: Element, name: string): number {
+  const value = getComputedStyle(element).getPropertyValue(name).trim();
+  const rem = value.endsWith("rem") ? parseFloat(getComputedStyle(document.documentElement).fontSize) : 1;
+  return parseFloat(value) * rem;
+}
+
+/** How wide an element is, as it changes. */
+function useWidth(element: RefObject<HTMLElement | null>): number {
+  const [width, setWidth] = useState(0);
+  useLayoutEffect(() => {
+    const at = element.current;
+    if (!at) return;
+    setWidth(at.getBoundingClientRect().width);
+    const watch = new ResizeObserver(([entry]) => setWidth(entry?.contentRect.width ?? 0));
+    watch.observe(at);
+    return () => watch.disconnect();
+  }, []);
+  return width;
+}
+
+/** How wide the open card may be beside the board, from its least to what the lanes leave or a line reads well at, and the width it starts at: what is left once the lanes read well. */
+interface DockRoom {
+  readonly min: number;
+  readonly max: number;
+  readonly initial: number;
+}
+
+/**
+ * The room for the open card beside the board, or null when the board has none and it opens over the board.
+ * There is room when the lanes on show keep their least width with the card at its least: a lane given the board's width counts as two,
+ * and the small button left of an empty lane counts as itself.
+ */
+function dockRoom(board: Element | null, room: number, lanes: number, rail: boolean): DockRoom | null {
+  if (!board || !room) return null;
+  const gap = lengthOf(board, "--s4");
+  const taken = rail ? lengthOf(board, "--hit") + gap : 0;
+  const left = (lane: number) => Math.floor(room - taken - (lanes * lane + (lanes + 1) * gap));
+  // No wider than a line reads well at, with the card's own padding.
+  const max = Math.min(left(lengthOf(board, "--lane-min")), lengthOf(board, "--read") + 2 * lengthOf(board, "--s6"));
+  const min = lengthOf(board, "--sheet-min");
+  const initial = Math.max(min, Math.min(left(lengthOf(board, "--lane-ease")), lengthOf(board, "--sheet")));
+  return max >= min ? { min, max, initial } : null;
+}
+
+/** The width the user dragged the open card to, as this browser keeps it. What the board has room for decides the rest. */
+const readDockWidth = (stored: unknown): number | null => (typeof stored === "number" && stored > 0 ? stored : null);
 
 /** A phone shows a lane at a time already, so none is widened there. */
 const PHONE = matchMedia("(max-width: 760px)");
@@ -113,7 +176,9 @@ export function Board(props: BoardProps) {
     if (away && document.activeElement === document.body) document.querySelector<HTMLElement>("[data-done-switch]")?.focus({ preventScroll: true });
   }, [away]);
   // One lane can be given the board's width, to be skimmed: each of its cards is a row that says all it has, and the other lanes fold into its head, each a press away.
-  const [kept, setWide] = usePersisted("progress:board-wide", readWide);
+  // Each board keeps its own, so widening a lane on one work's board leaves the others as they were.
+  const board = props.scope ?? "";
+  const [kept, setWide] = useBoardKept("progress:board-wide", board, isLane);
   const phone = usePhone();
   const wide = kept !== null && !phone && !idle(kept) ? kept : null;
   // A widened lane that empties is forgotten, so it does not come back wide on its own when something next lands in it.
@@ -133,41 +198,69 @@ export function Board(props: BoardProps) {
   };
   const folded = ({ lane, cards }: { readonly lane: Lane; readonly cards: readonly BoardCard[] }) =>
     idle(lane) ? null : <Folded key={lane} lane={lane} count={props.loading ? null : lane === "needs" ? cards.filter((card) => !isDone(card)).length : cards.length} onWide={() => widen(lane)} />;
+  // Each board keeps the card it last had open, so going to another board or tab and coming back opens it again. Closing it forgets it.
+  const [lastOpen, keepOpen] = useBoardKept("progress:board-card", board, isText);
+  const arrived = useRef<string | null>(null);
+  useEffect(() => {
+    if (arrived.current !== board) {
+      arrived.current = board;
+      if (props.open === null && lastOpen !== null) return navigate(props.hrefOf(lastOpen), true);
+    }
+    if (props.open !== lastOpen) keepOpen(props.open);
+  }, [board, props.open]);
   // A card the address names and the board no longer has: the line left its page, or its ask was marked done. The address goes back to the board's own.
   const gone = props.open !== null && !opened && props.whole && props.query === "";
   useEffect(() => {
     if (gone) navigate(props.hrefOf(null), true);
   }, [gone]);
+  // With room for it, the open card stands beside the lanes, so every lane stays in sight and a press on another card shows that one.
+  const dock = useRef<HTMLDivElement>(null);
+  const room = useWidth(dock);
+  const fit = phone ? null : dockRoom(dock.current, room, wide !== null ? 2 : lanes.filter(({ lane }) => !idle(lane)).length, wide === null && idle("needs") && props.done.length > 0);
+  const [chosen, choose] = usePersisted("progress:card-width", readDockWidth);
+  const docked = fit && Math.round(Math.min(fit.max, Math.max(fit.min, chosen ?? fit.initial)));
+  // A card closed is read from its top when next opened.
+  const shut = !opened;
+  useEffect(() => {
+    if (shut) sheetPlace.key = "";
+  }, [shut]);
   // The open card stays in sight in its lane as the arrows step through it.
   useEffect(() => {
     if (props.open) document.querySelector(`[data-card="${CSS.escape(props.open)}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [props.open]);
+  }, [props.open, docked !== null]);
   return (
-    <div className={s.board}>
-      {props.children ?? <ViewHead title="Board" />}
-      {props.query !== "" && !props.loading && lanes.every(({ cards }) => cards.length === 0) ? (
-        // Said once, not in each of four empty lanes.
-        <p className="nothing">Nothing on the board matches “{props.query}”.</p>
-      ) : (
-      <div className={s.lanes}>
-        {lanes.map(({ lane, cards }, at) =>
-          wide !== null ? (
-            lane === wide ? (
-              <LaneView key={lane} {...props} scoped={scoped} lane={lane} cards={cards} isDone={isDone} showDone={showDone} onShowDone={setShown} wide onWide={() => setWide(null)} before={lanes.slice(0, at).map(folded)} after={lanes.slice(at + 1).map(folded)} />
-            ) : null
-          ) : !idle(lane) ? (
-            <LaneView key={lane} {...props} scoped={scoped} lane={lane} cards={cards} isDone={isDone} showDone={showDone} onShowDone={setShown} wide={false} onWide={() => setWide(lane)} />
-          ) : props.done.length ? (
-            // All that is left of the lane is the way back to the asks marked done.
-            <button key={lane} type="button" data-done-switch className={`icon-btn ${s.laneRail}`} aria-label={`Nothing needs you. Show the ${plural(props.done.length, "ask")} you marked done.`} title={`Nothing needs you. Show the ${plural(props.done.length, "ask")} you marked done.`} onClick={() => setShown(true)}>
-              <HandPalmIcon aria-hidden />
-            </button>
-          ) : null,
-        )}
+    <div ref={dock} className={s.dock} style={docked === null ? undefined : { "--docked": `${docked}px` } as CSSProperties}>
+      <div className={s.dockMain}>
+        <div className={s.board}>
+          {props.children ?? <ViewHead title="Board" />}
+          {props.query !== "" && !props.loading && lanes.every(({ cards }) => cards.length === 0) ? (
+            // Said once, not in each of four empty lanes.
+            <p className="nothing">Nothing on the board matches “{props.query}”.</p>
+          ) : (
+          <div className={s.lanes}>
+            {lanes.map(({ lane, cards }, at) =>
+              wide !== null ? (
+                lane === wide ? (
+                  <LaneView key={lane} {...props} scoped={scoped} lane={lane} cards={cards} isDone={isDone} showDone={showDone} onShowDone={setShown} wide onWide={() => setWide(null)} before={lanes.slice(0, at).map(folded)} after={lanes.slice(at + 1).map(folded)} />
+                ) : null
+              ) : !idle(lane) ? (
+                <LaneView key={lane} {...props} scoped={scoped} lane={lane} cards={cards} isDone={isDone} showDone={showDone} onShowDone={setShown} wide={false} onWide={() => setWide(lane)} />
+              ) : props.done.length ? (
+                // All that is left of the lane is the way back to the asks marked done.
+                <button key={lane} type="button" data-done-switch className={`icon-btn ${s.laneRail}`} aria-label={`Nothing needs you. Show the ${plural(props.done.length, "ask")} you marked done.`} title={`Nothing needs you. Show the ${plural(props.done.length, "ask")} you marked done.`} onClick={() => setShown(true)}>
+                  <HandPalmIcon aria-hidden />
+                </button>
+              ) : null,
+            )}
+          </div>
+          )}
+        </div>
       </div>
-      )}
-      {opened && home ? (
+      {/* Not before the board is measured, so a card in the address opens the one way it stays. */}
+      {opened && home && room > 0 ? (
+        // Beside the board or over it are two ways to be open, so a window resized past the line opens the card afresh the other way.
         <Sheet
+          key={docked === null ? "over" : "beside"}
           card={opened}
           prev={home[at - 1] ?? null}
           next={home[at + 1] ?? null}
@@ -183,6 +276,7 @@ export function Board(props: BoardProps) {
           }}
           hrefOf={props.hrefOf}
           now={props.now}
+          docked={fit && docked !== null ? { ...fit, width: docked, onPreview: (width) => dock.current?.style.setProperty("--docked", `${width}px`), onCommit: choose, onReset: () => choose(null) } : null}
         />
       ) : null}
     </div>
@@ -206,6 +300,9 @@ function Folded(props: { readonly lane: Lane; readonly count: number | null; rea
 
 /** How far down each lane was read, by what it holds and its name, for as long as the tab is open: a look at another tab and back finds each lane where it was left. */
 const lanePlaces = new Map<string, number>();
+
+/** How far the open card was read: kept while it is open, so it opens afresh beside the board or over it at the same place. */
+const sheetPlace = { key: "", top: 0 };
 
 function LaneView(props: LaneProps) {
   const { lane, cards, viewed } = props;
@@ -551,6 +648,8 @@ interface SheetProps {
   readonly onDone: (on: boolean) => void;
   readonly hrefOf: (card: string | null) => string;
   readonly now: number;
+  /** It stands beside the lanes, as wide as the user drags it, and the board stays in use. Without room for that it opens over the board, which waits for it. */
+  readonly docked: (DockRoom & { readonly width: number; readonly onPreview: (width: number) => void; readonly onCommit: (width: number) => void; readonly onReset: () => void }) | null;
 }
 
 /**
@@ -563,11 +662,11 @@ function Sheet(props: SheetProps) {
   const seen = viewedOf(props.viewed, card.viewKey);
   const shut = () => close(hrefOf(null));
   const move = (to: BoardCard | null) => (to ? navigate(hrefOf(to.name), true) : undefined);
-  // The sheet is the only thing to use while it is open. When it closes, the card last shown has focus, wherever the sheet was opened from.
+  // Over the board, the sheet is the only thing to use while it is open. When it closes, the card last shown has focus, wherever the sheet was opened from.
   const shown = useRef("");
   shown.current = card.name;
   useEffect(() => {
-    const app = document.getElementById("root");
+    const app = props.docked ? null : document.getElementById("root");
     if (app) app.inert = true;
     return () => {
       if (app) app.inert = false;
@@ -579,7 +678,8 @@ function Sheet(props: SheetProps) {
   const self = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (self.current?.inert) return;
+      // A lane's own control already took the arrow, beside a docked card.
+      if (self.current?.closest("[inert]") || event.defaultPrevented) return;
       if (event.key === "Escape") shut();
       else if (isTyping(event) || event.metaKey || event.ctrlKey || event.altKey) return;
       else if (event.key === "ArrowLeft" || event.key === "ArrowUp" || event.key === "k") move(prev);
@@ -594,51 +694,57 @@ function Sheet(props: SheetProps) {
   useEffect(() => {
     if (card.viewKey !== null && !props.viewed.has(card.viewKey)) void props.viewed.add([card.viewKey]);
   }, [card.viewKey]);
-  // Each card starts at its top.
+  // Each card starts at its top. The same card opened afresh the other way, beside the board or over it, stays where it was read to.
   const body = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    body.current?.scrollTo({ top: 0 });
+    body.current?.scrollTo({ top: sheetPlace.key === card.key ? sheetPlace.top : 0 });
   }, [card.key]);
 
   const need = card.need;
+  const sheet = (
+    <aside ref={props.docked ? self : undefined} className={s.sheet} role={props.docked ? undefined : "dialog"} aria-modal={props.docked ? undefined : true} aria-label={card.title} data-lane={card.lane} data-docked={props.docked ? "" : undefined}>
+      {/* With less room than one step of the keys between its least and most, there is nothing to drag. */}
+      {props.docked && props.docked.max - props.docked.min >= RESIZE_STEP ? <Resizer label="Card width" edge="start" className={s.sheetResizer} {...props.docked} /> : null}
+      <header className={s.sheetHead}>
+        <span className={s.sheetLane}>
+          <LaneIcon weight={card.lane === "needs" ? "fill" : "bold"} aria-hidden />
+          {LANE_LABEL[card.lane]}
+        </span>
+        <span className={s.sheetAt}>{props.of > 1 ? `${props.at} of ${props.of}` : null}</span>
+        <button type="button" className="icon-btn" onClick={() => move(prev)} disabled={!prev} aria-label="Previous card" title="Previous (←)">
+          <CaretLeftIcon weight="bold" aria-hidden />
+        </button>
+        <button type="button" className="icon-btn" onClick={() => move(next)} disabled={!next} aria-label="Next card" title="Next (→)">
+          <CaretRightIcon weight="bold" aria-hidden />
+        </button>
+        <button type="button" className="icon-btn" onClick={shut} aria-label="Close" title="Close (Esc)" autoFocus>
+          <XIcon aria-hidden />
+        </button>
+      </header>
+      <div className={s.sheetBody} ref={body} onScroll={(event) => void Object.assign(sheetPlace, { key: card.key, top: event.currentTarget.scrollTop })}>
+        <CardWhole card={card} scoped={false} heading="h2" now={props.now} />
+      </div>
+      <footer className={s.sheetFoot}>
+        {need ? <AskThread entry={need} /> : null}
+        {need ? (
+          <button type="button" className="btn" aria-pressed={props.done} title={props.done ? "It goes back on your lists." : "It leaves your lists, and the page is not changed."} onClick={() => props.onDone(!props.done)}>
+            {props.done ? <ArrowCounterClockwiseIcon aria-hidden /> : <CheckIcon aria-hidden />}
+            {props.done ? "Bring back" : "Mark done"}
+          </button>
+        ) : null}
+        {seen ? (
+          <button type="button" className="btn" aria-pressed={seen.on} onClick={() => seen.set(!seen.on)}>
+            {seen.on ? <CheckCircleIcon weight="fill" aria-hidden /> : <CircleIcon aria-hidden />}
+            {seen.on ? "Viewed" : "Mark viewed"}
+          </button>
+        ) : null}
+      </footer>
+    </aside>
+  );
+  if (props.docked) return sheet;
   return createPortal(
     <div ref={self} className={s.scrim} onClick={(event) => (event.target === event.currentTarget ? shut() : undefined)}>
-      <aside className={s.sheet} role="dialog" aria-modal="true" aria-label={card.title} data-lane={card.lane}>
-        <header className={s.sheetHead}>
-          <span className={s.sheetLane}>
-            <LaneIcon weight={card.lane === "needs" ? "fill" : "bold"} aria-hidden />
-            {LANE_LABEL[card.lane]}
-          </span>
-          <span className={s.sheetAt}>{props.of > 1 ? `${props.at} of ${props.of}` : null}</span>
-          <button type="button" className="icon-btn" onClick={() => move(prev)} disabled={!prev} aria-label="Previous card" title="Previous (←)">
-            <CaretLeftIcon weight="bold" aria-hidden />
-          </button>
-          <button type="button" className="icon-btn" onClick={() => move(next)} disabled={!next} aria-label="Next card" title="Next (→)">
-            <CaretRightIcon weight="bold" aria-hidden />
-          </button>
-          <button type="button" className="icon-btn" onClick={shut} aria-label="Close" title="Close (Esc)" autoFocus>
-            <XIcon aria-hidden />
-          </button>
-        </header>
-        <div className={s.sheetBody} ref={body}>
-          <CardWhole card={card} scoped={false} heading="h2" now={props.now} />
-        </div>
-        <footer className={s.sheetFoot}>
-          {need ? <AskThread entry={need} /> : null}
-          {need ? (
-            <button type="button" className="btn" aria-pressed={props.done} title={props.done ? "It goes back on your lists." : "It leaves your lists, and the page is not changed."} onClick={() => props.onDone(!props.done)}>
-              {props.done ? <ArrowCounterClockwiseIcon aria-hidden /> : <CheckIcon aria-hidden />}
-              {props.done ? "Bring back" : "Mark done"}
-            </button>
-          ) : null}
-          {seen ? (
-            <button type="button" className="btn" aria-pressed={seen.on} onClick={() => seen.set(!seen.on)}>
-              {seen.on ? <CheckCircleIcon weight="fill" aria-hidden /> : <CircleIcon aria-hidden />}
-              {seen.on ? "Viewed" : "Mark viewed"}
-            </button>
-          ) : null}
-        </footer>
-      </aside>
+      {sheet}
     </div>,
     document.body,
   );

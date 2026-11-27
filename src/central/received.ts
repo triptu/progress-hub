@@ -1,6 +1,8 @@
-import type { Agent, Commit, FeedEntry, Health, Html, Instant, Item, JournalEvent, Live, Media, NeedEntry, OpenLink, PlanEntry, PullRequest, RenderedItem, RenderedSection, SessionRef, Stall, WorkBody, WorkDetail, WorkId, WorkSummary } from "../core/types.ts";
+import type { Agent, Commit, FeedEntry, FolderFile, Health, Html, Instant, Item, JournalEvent, Live, Media, NeedEntry, OpenLink, PlanEntry, PullRequest, RenderedItem, RenderedSection, SessionRef, Stall, WorkBody, WorkDetail, WorkId, WorkSummary } from "../core/types.ts";
 import { count, either, flag, listOf, oneOf, orElse, orNone, orNull, readOrNull, shape, tableOf, text, variant } from "../core/reader.ts";
 import { FROM, type StoreState } from "../stores/store.ts";
+import { readOutcome, readStarLine } from "../core/outcomes.ts";
+import { readShownChange } from "../core/changes.ts";
 
 /*
  * What a machine sends the central hub, checked and made the hub's own: every work's id and every address a
@@ -113,7 +115,14 @@ const rendered = shape<RenderedItem>({
   commits: listOf(commit),
 });
 const feedEntry = shape<FeedEntry>({ at: instant, work: text, workTitle: text, project: orNull(text), event, titleHtml: orNull(html), html: orNull(html), prs: listOf(pullRequest), commits: listOf(commit), important: flag });
-const media = shape<Media>({ work: text, kind: oneOf("image", "video", "page", "file"), src: text, caption: text, at: instant });
+const media = shape<Media>({
+  work: text,
+  kind: oneOf("image", "video", "page", "file", "folder"),
+  src: text,
+  caption: text,
+  at: instant,
+  files: orNone(listOf(shape<FolderFile>({ name: text, src: text, at: instant }))),
+});
 const workSummary = shape<WorkSummary>({
   id: text,
   title: text,
@@ -133,6 +142,9 @@ const workSummary = shape<WorkSummary>({
   shipped: count,
   threadLink: orNull(text),
   links: listOf(shape<OpenLink>({ label: text, url: text, href: orNull(text), up: orNull(flag) })),
+  outcomes: orNone(count),
+  star: orNone(readStarLine),
+  latestChange: orNone(instant),
 });
 const need = variant<NeedEntry, "source">("source", {
   page: { work: text, workTitle: text, project: orNull(text), itemId: text, title: text, titleHtml: html, html, important: flag, since: instant, repliedSince: flag, threadLink: orNull(text) },
@@ -179,6 +191,8 @@ const workDetail = shape<WorkDetail>({
   pullRequests: listOf(pullRequest),
   feed: listOf(feedEntry),
   notes: listOf(text),
+  outcomes: orNone(listOf(readOutcome)),
+  changes: orNone(listOf(readShownChange(pullRequest))),
 });
 
 /** The machine that sent a state, as the works it adopts are named: its id leads each work's id, and its label says where a work runs. */

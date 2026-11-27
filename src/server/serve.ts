@@ -130,6 +130,7 @@ export function serve(options: {
       "/board": page,
       "/activity": page,
       "/media": page,
+      "/changes": page,
       // The tabs of earlier builds, which the page sends on to where each went.
       "/needs": page,
       "/todos": page,
@@ -140,6 +141,7 @@ export function serve(options: {
       "/w/:work/:tab": page,
       "/api/state": reads,
       "/api/media": reads,
+      "/api/changes": reads,
       "/files/*": reads,
       // The hub's two writes, marks and todos. Only its own page may make them: another site's form can post here, but not with this origin.
       "/api/marks": {

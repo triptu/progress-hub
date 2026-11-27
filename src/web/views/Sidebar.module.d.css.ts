@@ -5,7 +5,6 @@ declare const classes: {
   readonly home: string;
   readonly homeRow: string;
   readonly open: string;
-  readonly resizer: string;
   readonly row: string;
   readonly rowEnd: string;
   readonly rowSub: string;

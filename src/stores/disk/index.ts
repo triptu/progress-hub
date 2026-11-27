@@ -9,6 +9,9 @@ import type { Commit, FeedEntry, Html, Instant, JournalEvent, Media, NeedEntry, 
 import { agentSources } from "../../sources/index.ts";
 import type { AgentSource } from "../../sources/source.ts";
 import { planOf } from "../../core/plan.ts";
+import { starLine, type StarLine } from "../../core/outcomes.ts";
+import type { ShownChange } from "../../core/changes.ts";
+import { MOST_ROW_BYTES } from "../../central/protocol.ts";
 import { FEED_LIMIT, type StoreState, type WorkStore } from "../store.ts";
 import { Agents } from "./agents.ts";
 import { GitHub, runGh, type Runner } from "./github.ts";
@@ -109,6 +112,7 @@ export class DiskStore implements WorkStore {
       shipped: count("shipped"),
       threadLink: this.threadLinkOf(work),
       links: (page?.links ?? []).map((link) => this.openLink(work, link)),
+      ...measured(work),
     };
   }
 
@@ -262,13 +266,41 @@ export class DiskStore implements WorkStore {
     if (!work) return null;
     const body: WorkBody = { ...work.body, sections: this.sections(work) };
     const { notes } = work.page;
-    const skipped = work.skipped === 0 ? [] : [work.skipped === 1 ? "1 line of .history.jsonl could not be read and was skipped." : `${work.skipped} lines of .history.jsonl could not be read and were skipped.`];
+    const skipped = [
+      ...(work.skipped === 0 ? [] : [work.skipped === 1 ? "1 line of .history.jsonl could not be read and was skipped." : `${work.skipped} lines of .history.jsonl could not be read and were skipped.`]),
+      ...(work.outcomes.skipped === 0 ? [] : [work.outcomes.skipped === 1 ? "1 line of outcomes.jsonl was left out. progress check says why." : `${work.outcomes.skipped} lines of outcomes.jsonl were left out. progress check says why.`]),
+      ...(work.changes.skipped === 0 ? [] : [work.changes.skipped === 1 ? "1 line of changes.jsonl could not be read and was left out." : `${work.changes.skipped} lines of changes.jsonl could not be read and were left out.`]),
+    ];
     const feed = told(work.events)
       .map((event) => ({ event }))
       .sort(newestEventFirst)
       .map(({ event }) => this.feedEntry(work, event));
     const pullRequests = this.pullRequestsOf(work);
-    return { summary: this.summary(work, planOf(this.from(work), body.sections, pullRequests)), body, agents: this.agents.agentsOf(work.threads), pullRequests, feed, notes: [...notes, ...skipped] };
+    const outcomes = work.outcomes.list;
+    const page: WorkDetail = { summary: this.summary(work, planOf(this.from(work), body.sections, pullRequests)), body, agents: this.agents.agentsOf(work.threads), pullRequests, feed, notes: [...notes, ...skipped], ...(outcomes.length ? { outcomes } : {}) };
+    return this.withChanges(work, page);
+  }
+
+  /**
+   * A page with the work's key changes, the newest that fit in what one row of a central hub holds with the rest of
+   * the page, so no machine's send is refused for them. A change that doesn't fit is left out, and the page says so.
+   */
+  private withChanges(work: Work, page: WorkDetail): WorkDetail {
+    if (work.changes.list.length === 0) return page;
+    // Room for the note that some were left out, and for what the central hub adds when it makes a page its own.
+    let left = MOST_ROW_BYTES - PAGE_SLACK - byteSize(JSON.stringify(page));
+    const changes: ShownChange[] = [];
+    for (const change of work.changes.list) {
+      const shown: ShownChange = { ...change, pull: this.refs(change.pr, work).prs[0] ?? null };
+      const size = byteSize(JSON.stringify(shown)) + 1;
+      if (size > left) continue;
+      left -= size;
+      changes.push(shown);
+    }
+    const out = work.changes.list.length - changes.length;
+    const notes = out === 0 ? page.notes : [...page.notes, `${out === 1 ? "1 key change was" : `${out} key changes were`} left out: with the rest of the page, ${out === 1 ? "it is" : "they are"} more than a central hub keeps for one work.`];
+    // A work with changes always says so on its page, even when none fit: a central hub that kept the page without them asks for it again.
+    return { ...page, notes, changes };
   }
 
   private pullRequestsOf(work: Work): PullRequest[] {
@@ -295,6 +327,17 @@ export class DiskStore implements WorkStore {
   }
 }
 
+/**
+ * How many outcomes the work records and its north star as its card shows it, and when its newest key change was,
+ * as fields a summary has only when there are some.
+ */
+function measured(work: Work): { outcomes?: number; star?: StarLine; latestChange?: Instant } {
+  const list = work.outcomes.list;
+  const line = starLine(list);
+  const newest = work.changes.list[0];
+  return { ...(list.length ? { outcomes: list.length } : {}), ...(line ? { star: line } : {}), ...(newest ? { latestChange: newest.at } : {}) };
+}
+
 /** The file a try link names, as a path from the root. `~` is the home folder, and a relative path starts at the work's folder. */
 function filePath(url: string, dir: string): string | null {
   const path = localPath(url);
@@ -309,6 +352,11 @@ function isFile(path: string): boolean {
     return false;
   }
 }
+
+/** What a page leaves free of a central hub's row: the central hub names each id and address with the machine's, which makes a page grow. */
+const PAGE_SLACK = 256 * 1024;
+
+const byteSize = (text: string) => new TextEncoder().encode(text).byteLength;
 
 /** How far back the hub's own list of what shipped goes. */
 const SHIPPED_LATELY_MS = 14 * 24 * 60 * 60 * 1000;

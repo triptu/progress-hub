@@ -15,6 +15,8 @@ declare const classes: {
   readonly cardShot: string;
   readonly cardTitle: string;
   readonly cards: string;
+  readonly dock: string;
+  readonly dockMain: string;
   readonly ghost: string;
   readonly lane: string;
   readonly laneBody: string;
@@ -41,6 +43,7 @@ declare const classes: {
   readonly sheetFoot: string;
   readonly sheetHead: string;
   readonly sheetLane: string;
+  readonly sheetResizer: string;
   readonly whole: string;
   readonly wholeFrom: string;
   readonly wholeLive: string;

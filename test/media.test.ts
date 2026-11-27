@@ -75,10 +75,29 @@ test("/api/media lists what each page shows inside its own folder, newest first 
 });
 
 test("a link to a file is an artifact, named by the link's words", () => {
-  const refs = mediaRefs("See [how it **works**](how-it-works.html), the [report](out/report.pdf), [the repo](https://github.com/o/r) and [the code](src/main.ts).\n\n![Shot](a.png)\n");
+  const refs = mediaRefs("See [how it **works**](how-it-works.html), the [report](out/report.pdf), [the queries](audit.sql), [the repo](https://github.com/o/r) and [the code](src/main.ts).\n\n![Shot](a.png)\n");
   expect(refs).toEqual([
     { kind: "page", target: "how-it-works.html", caption: "how it works" },
     { kind: "file", target: "out/report.pdf", caption: "report" },
+    { kind: "file", target: "audit.sql", caption: "the queries" },
     { kind: "image", target: "a.png", caption: "Shot" },
+  ]);
+});
+
+test("a link to a folder in the work's folder is one item with the files in it, by name as a person sorts them", async () => {
+  mkdirSync(join(home, "gamma", "queries", "deep"), { recursive: true });
+  put(join(home, "gamma", "queries", "d10.json"), "{}", at("2026-11-12T10:00:00Z"));
+  put(join(home, "gamma", "queries", "d2.json"), "{}", at("2026-11-12T11:00:00Z"));
+  put(join(home, "gamma", "queries", "deep", "x.sql"), "select 1", at("2026-11-12T09:00:00Z"));
+  put(join(home, "gamma", "queries", ".secret"), "no", at("2026-11-12T12:00:00Z"));
+  mkdirSync(join(home, "gamma", "empty"));
+  put(join(home, "gamma", "progress.md"), "---\ntitle: Gamma\n---\n\nSee [the queries](queries/), [nothing](empty) and [the site](https://example.com/docs).\n", at("2026-11-12T12:00:00Z"));
+  running.own.refresh();
+  const media = ((await (await fetch(`${running.url}/api/media`)).json()) as Media[]).filter((m) => m.work === "gamma");
+  expect(media.map((m) => [m.kind, m.src, m.caption, m.at])).toEqual([["folder", "/files/gamma/queries", "the queries", "2026-11-12T11:00:00.000Z"]]);
+  expect(media[0]?.files?.map((f) => [f.name, f.src])).toEqual([
+    ["d2.json", "/files/gamma/queries/d2.json"],
+    ["d10.json", "/files/gamma/queries/d10.json"],
+    ["deep/x.sql", "/files/gamma/queries/deep/x.sql"],
   ]);
 });

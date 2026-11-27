@@ -13,6 +13,13 @@ interface Seen {
 const KEY = "progress:seen";
 /** The name the board across everything is recorded under, beside the works. No work's folder can have it. */
 export const BOARD_SEEN = "~board" as WorkId;
+/**
+ * The name a work's Outcomes is recorded under, beside the works: the newest reading of its star seen there, so the
+ * tab can say what moved since. Readings change no page, so the work's own record never moves for them.
+ */
+export const outcomesSeen = (work: WorkId) => `${work}\noutcomes` as WorkId;
+/** The name the Key changes tab is recorded under, from everything's tab or a work's: the newest change it has shown. */
+export const CHANGES_SEEN = "~changes" as WorkId;
 const listeners = new Set<() => void>();
 
 function read(): Seen {

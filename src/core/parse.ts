@@ -1,7 +1,8 @@
 import { existsSync } from "node:fs";
 import { isAbsolute, join, normalize, relative } from "node:path";
 import { LONG_TITLE, openingDate, plain, splitItem, trimLines, underWay } from "./text.ts";
-import type { Item, Page, Section, SectionKind, TryLink } from "./types.ts";
+import { mediaKind } from "./kinds.ts";
+import type { Item, Media, Page, Section, SectionKind, TryLink } from "./types.ts";
 
 export const SECTION_LABEL: Readonly<Record<SectionKind, string>> = { needs: "Needs you", doing: "In progress", next: "Next", decisions: "Decisions", shipped: "Shipped" };
 
@@ -414,24 +415,18 @@ export function linkTargets(markdown: string): string[] {
   return targets;
 }
 
-/** An image, video or page a page shows, as written: the target and its alt text. */
+/** An image, video, page, document or folder a page shows or links, as written: the target and its words. */
 export interface MediaRef {
-  readonly kind: "image" | "video" | "page" | "file";
+  readonly kind: Media["kind"];
   readonly target: string;
   readonly caption: string;
 }
 
-const IMAGE_FILE = /\.(png|jpe?g|gif|webp|avif|svg)$/i;
-const VIDEO_FILE = /\.(mp4|m4v|mov|webm|ogv)$/i;
-const PAGE_FILE = /\.html?$/i;
 /** Documents a page may link as something it made: reports, data, archives. Source files are not among them. */
-const DOC_FILE = /\.(pdf|md|txt|csv|tsv|json|ya?ml|log|zip|diff|patch|xlsx?|docx?|pptx?)$/i;
+const DOC_FILE = /\.(pdf|md|markdown|txt|csv|tsv|json|jsonl|ndjson|ya?ml|toml|ini|xml|sql|log|zip|diff|patch|xlsx?|docx?|pptx?)$/i;
 
-/** What an image link to this target shows, from the file's extension. */
-export function mediaKind(target: string): MediaRef["kind"] | null {
-  const file = target.replace(/[?#].*$/, "");
-  return VIDEO_FILE.test(file) ? "video" : PAGE_FILE.test(file) ? "page" : IMAGE_FILE.test(file) ? "image" : null;
-}
+/** A relative link whose last part has no extension, such as `queries/`: a folder, when one is there. */
+const MAYBE_FOLDER = /^(?![a-z][a-z0-9+.-]*:)(?!#)[^?#]*?(^|\/)[^./?#]+\/?$/i;
 
 /**
  * What a page shows, in order: Markdown image syntax (an image, or a video or HTML file in its place),
@@ -455,9 +450,9 @@ export function mediaRefs(markdown: string): MediaRef[] {
       element(el) {
         const target = decodeEntities(el.getAttribute("href") ?? "");
         const file = target.replace(/[?#].*$/, "");
-        const found = mediaKind(target) ?? (DOC_FILE.test(file) ? "file" : null);
+        const found = mediaKind(target) ?? (DOC_FILE.test(file) ? "file" : MAYBE_FOLDER.test(target) ? "folder" : null);
         if (!found) return;
-        const ref = { kind: found, target, caption: "" };
+        const ref: { kind: MediaRef["kind"]; target: string; caption: string } = { kind: found, target, caption: "" };
         refs.push(ref);
         linked = ref;
         el.onEndTag(() => {

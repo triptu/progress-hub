@@ -5,6 +5,7 @@ declare const classes: {
   readonly notice: string;
   readonly search: string;
   readonly searchClear: string;
+  readonly sideResizer: string;
   readonly tab: string;
   readonly tabDot: string;
   readonly tabName: string;

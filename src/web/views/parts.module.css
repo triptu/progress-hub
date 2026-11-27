@@ -214,3 +214,31 @@
     flex-wrap: wrap;
   }
 }
+
+/* A panel's resizable edge: a strip wide enough to take hold of, drawn as a line only while it is in use. Where it stands is the panel's. */
+.resizer {
+  width: 9px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.resizer::after {
+  content: "";
+  display: block;
+  width: 1px;
+  height: 100%;
+  margin: 0 auto;
+  background: transparent;
+  transition: background var(--fast) var(--ease);
+}
+
+.resizer:hover::after,
+.resizer:active::after,
+.resizer:focus-visible::after {
+  width: 2px;
+  background: var(--line-strong);
+}
+
+.resizer:focus-visible {
+  outline: none;
+}

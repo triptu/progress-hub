@@ -5,6 +5,8 @@ import { instant, pageEvents, partNames, pullRequestEvents, readJournal, replay,
 import { mediaRefs, parsePage, type MediaRef } from "../../core/parse.ts";
 import { liveMark, reason, splitItem, withoutLiveMark } from "../../core/text.ts";
 import type { Health, Html, Instant, JournalEvent, Live, Media, Page, RenderedSection, SessionRef, WorkBody, WorkId } from "../../core/types.ts";
+import { outcomesOf, type Outcome } from "../../core/outcomes.ts";
+import { changesOf, type KeyChange } from "../../core/changes.ts";
 import { findMedia, newestFirst } from "./media.ts";
 import { renderInline, renderMarkdown } from "./render.ts";
 
@@ -30,7 +32,14 @@ export interface Work {
   readonly media: readonly Media[];
   /** Why the journal could not be read or written on the last try. */
   readonly problem: string | null;
+  /** What its outcomes.jsonl holds, as last read: the outcomes, the lines that could not be read, and the file's stamp. */
+  readonly outcomes: { readonly stamp: string; readonly list: readonly Outcome[]; readonly skipped: number };
+  /** What its changes.jsonl holds, as last read: the changes newest first, the lines that could not be read, and the file's stamp. */
+  readonly changes: { readonly stamp: string; readonly list: readonly KeyChange[]; readonly skipped: number };
 }
+
+const NO_OUTCOMES = { stamp: "", list: [], skipped: 0 } as const;
+const NO_CHANGES = { stamp: "", list: [], skipped: 0 } as const;
 
 /** What `record` gives: the whole journal, or why it could not be read or written. */
 type Recorded = { readonly ok: true; readonly events: JournalEvent[]; readonly skipped: number } | { readonly ok: false; readonly problem: string };
@@ -82,6 +91,8 @@ export class Pages {
         this.scanPage(folder, now);
         this.scanThreads(folder.id);
         this.scanMedia(folder.id);
+        this.scanOutcomes(folder.id);
+        this.scanChanges(folder.id);
       } catch (error) {
         const path = error instanceof Error && "syscall" in error ? ("path" in error ? String(error.path) : folder.file) : null;
         this.failedReads.push(path !== null ? `Can't read ${path}: ${reason(error)}` : `The hub failed on ${folder.file}: ${reason(error)}`);
@@ -131,7 +142,7 @@ export class Pages {
     const page = parsePage(text, folder.dir);
     const events = known?.events ?? [];
     const body = this.renderBody(folder.id, page, events);
-    this.works.set(folder.id, { folder, stamp, mtime, page, threads: known?.threads ?? [], body, events, skipped: known?.skipped ?? 0, refs: mediaRefs(text), media: known?.media ?? [], problem: known?.problem ?? null });
+    this.works.set(folder.id, { folder, stamp, mtime, page, threads: known?.threads ?? [], body, events, skipped: known?.skipped ?? 0, refs: mediaRefs(text), media: known?.media ?? [], problem: known?.problem ?? null, outcomes: known?.outcomes ?? NO_OUTCOMES, changes: known?.changes ?? NO_CHANGES });
     this.changed();
   }
 
@@ -175,6 +186,33 @@ export class Pages {
     if (JSON.stringify(media) === JSON.stringify(work.media)) return;
     // The page's HTML carries each picture's size and time, so it is drawn again for the file that arrived or changed.
     this.works.set(id, { ...work, media, body: this.renderBody(id, work.page, work.events) });
+    this.changed();
+  }
+
+  /**
+   * Reads the work's outcomes.jsonl when it changed. A reading is no change to the page, so nothing is journalled:
+   * the store's version goes up, which is all a machine linked to a central hub needs to send again.
+   */
+  private scanOutcomes(id: WorkId): void {
+    const work = this.works.get(id);
+    if (!work) return;
+    const path = join(work.folder.dir, "outcomes.jsonl");
+    const stamp = stampOf(path);
+    if (stamp === work.outcomes.stamp) return;
+    const read = outcomesOf(stamp === "" ? "" : readFileSync(path, "utf8"));
+    this.works.set(id, { ...work, outcomes: { stamp, list: read.outcomes, skipped: read.skipped.length } });
+    this.changed();
+  }
+
+  /** Reads the work's changes.jsonl when it changed. Like a reading, a change is no change to the page, so nothing is journalled. */
+  private scanChanges(id: WorkId): void {
+    const work = this.works.get(id);
+    if (!work) return;
+    const path = join(work.folder.dir, "changes.jsonl");
+    const stamp = stampOf(path);
+    if (stamp === work.changes.stamp) return;
+    const read = changesOf(stamp === "" ? "" : readFileSync(path, "utf8"));
+    this.works.set(id, { ...work, changes: { stamp, list: read.list, skipped: read.skipped } });
     this.changed();
   }
 
@@ -231,6 +269,17 @@ export class Pages {
       })),
     }));
     return { goal: renderMarkdown(page.goal, work, dir), summary: renderMarkdown(page.summary, work, dir), sections };
+  }
+}
+
+/** A file's modification time and size, to spot a change from a stat alone. Empty when there is no file. */
+function stampOf(path: string): string {
+  try {
+    const stat = statSync(path);
+    return `${stat.mtimeMs}:${stat.size}`;
+  } catch (error) {
+    if (!isMissing(error)) throw error;
+    return "";
   }
 }
 

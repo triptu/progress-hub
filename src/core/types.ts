@@ -8,6 +8,9 @@
  *   Hub API   what the server sends the browser: pages joined with the journal and with what the harnesses know.
  */
 
+import type { Outcome, StarLine } from "./outcomes.ts";
+import type { ShownChange } from "./changes.ts";
+
 /** A piece of work. The id is its folder name in the progress home. */
 export type WorkId = string & { readonly __work: never };
 /**
@@ -206,6 +209,12 @@ export interface WorkSummary {
   readonly threadLink: string | null;
   /** Where to open what the work is building. */
   readonly links: readonly OpenLink[];
+  /** How many outcomes the work records, so its Outcomes tab shows before its page loads. Absent with none. */
+  readonly outcomes?: number;
+  /** The work's north star, when it records outcomes and marked one. A hub of an earlier build sends none. */
+  readonly star?: StarLine;
+  /** When the work's newest key change was recorded, so the Key changes tab shows before its page loads, with a dot while it is unread. Absent with none. */
+  readonly latestChange?: Instant;
 }
 
 export type NeedEntry =
@@ -326,18 +335,30 @@ export interface HubState {
   readonly signedIn?: boolean;
 }
 
-/** An image, a video, or an HTML page (a built option or a mock) that a work's page shows. */
+/** An image, a video, an HTML page (a built option or a mock), a document or a folder that a work's page shows. */
 export interface Media {
   readonly work: WorkId;
-  /** A "page" is an HTML file, and a "file" is any other document the page links: a PDF, a report, a data file. */
-  readonly kind: "image" | "video" | "page" | "file";
+  /** A "page" is an HTML file, a "file" any other document the page links (a PDF, a report, a data file), and a "folder" a folder of them. */
+  readonly kind: "image" | "video" | "page" | "file" | "folder";
   /** Where the browser loads it: under /files/<work>/, the same URL the work's page uses. */
   readonly src: string;
   /** The alt text as written. Empty when there is none. */
   readonly caption: string;
-  /** The file's modification time. */
+  /** The file's modification time. A folder's is its newest file's. */
+  readonly at: Instant;
+  /** A folder's files, by name, at most `MOST_FOLDER_FILES`. */
+  readonly files?: readonly FolderFile[];
+}
+
+/** One file in a folder a page links. `name` is its path inside the folder. */
+export interface FolderFile {
+  readonly name: string;
+  readonly src: string;
   readonly at: Instant;
 }
+
+/** The most files of one folder the hub lists, and sends to the central hub. */
+export const MOST_FOLDER_FILES = 200;
 
 /** What a Shipped item's page says about it being where the user would try it: deployed, released, installed. */
 export interface Live {
@@ -394,4 +415,8 @@ export interface WorkDetail {
   /** Everything the hub saw happen to this work, newest first. */
   readonly feed: readonly FeedEntry[];
   readonly notes: readonly string[];
+  /** The numbers the work moves, from its outcomes.jsonl. Left out when it has none, and by a hub of an earlier build. */
+  readonly outcomes?: readonly Outcome[];
+  /** Its key changes, from its changes.jsonl, newest first. Left out when it has none, and by a hub of an earlier build. */
+  readonly changes?: readonly ShownChange[];
 }

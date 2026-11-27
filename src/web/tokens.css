@@ -51,6 +51,13 @@
   --needs: oklch(78% 0.125 58);
   --working: oklch(78% 0.11 158);
   --merged: oklch(75% 0.1 300);
+  /* A diff's added and removed lines. */
+  --added: oklch(78% 0.13 150);
+  --removed: oklch(72% 0.15 25);
+  /* A diff's changed lines: a column's new type, a constraint validated. */
+  --changed: oklch(82% 0.11 85);
+  /* How much of --removed a dropped line's ground takes. Light needs more, to tell it from a changed line. */
+  --dropped-tint: 7%;
   --accent: oklch(77% 0.085 245);
   --link: var(--accent);
   --focus: var(--accent);
@@ -69,13 +76,15 @@
   --scrim: oklch(14% 0.004 264);
 
   /*
-   * Type. Four sizes and three weights, and no others. Each size is a role with its line height and weight
+   * Type. Four sizes and three weights, and no others, besides the one figure size for a headline number. Each size is a role with its line height and weight
    * in one `font` value: use the role, never a size. Regular is what is read, --medium is a name (a card,
    * a row, a tab), and --strong is a heading or a label inside body text.
    * Mono is for code, branches and pull request numbers only, at the small size; times and counts are sans.
    */
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* 40px: the one number a screen is about, such as a work's north star. Nothing else is this size. */
+  --t-figure: 600 2.5rem / 1.1 var(--sans);
   /* 22px: the name of a screen or of a work, set tight */
   --t-title: 600 1.375rem / 1.2 var(--sans);
   --title-tracking: -0.018em;
@@ -127,7 +136,11 @@
   --page: 72rem;
   /* The narrowest a lane gets before the lanes scroll sideways. */
   --lane-min: 14rem;
+  /* The width a lane reads well at. The open card beside the board starts at what is left once the lanes have it. */
+  --lane-ease: 18rem;
   --sheet: 34rem;
+  /* The narrowest the open card gets standing beside the board. With less room it opens over the board. */
+  --sheet-min: 24rem;
   /* The reading column: about ninety characters of the body size. */
   --read: 41rem;
   --rail: 208px;
@@ -173,6 +186,10 @@
   --needs: oklch(52% 0.145 46);
   --working: oklch(50% 0.105 158);
   --merged: oklch(51% 0.15 300);
+  --added: oklch(50% 0.13 150);
+  --removed: oklch(52% 0.17 25);
+  --changed: oklch(56% 0.12 75);
+  --dropped-tint: 12%;
   --accent: oklch(50% 0.12 255);
   /* Yellow-brown, not amber: next to the orange that means "needs you", amber reads as the same colour. */
   --star: oklch(60% 0.125 78);

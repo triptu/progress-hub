@@ -53,6 +53,11 @@
   background: var(--needs);
 }
 
+/* New since the last look, which is blue everywhere, not orange: nothing waits on the user. */
+.tabDot[data-kind="new"] {
+  background: var(--accent);
+}
+
 .search {
   display: flex;
   align-items: center;
@@ -206,7 +211,19 @@
   }
 }
 
+/* The sidebar's right edge, over the line between it and the screen. */
+.sideResizer {
+  grid-area: 1 / 1;
+  justify-self: end;
+  z-index: 5;
+  margin-inline-end: -5px;
+}
+
 @media (max-width: 760px) {
+  .sideResizer {
+    display: none;
+  }
+
   .search {
     order: 1;
     flex: 1;

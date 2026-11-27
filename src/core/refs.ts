@@ -14,6 +14,10 @@ export function githubRefs(text: string): GitHubRef[] {
   return [...text.matchAll(LINK)].map(toRef);
 }
 
+/** Whether two links name the same pull request, or the same commit by any length of its hash. */
+export const sameRef = (a: GitHubRef, b: GitHubRef): boolean =>
+  a.kind === b.kind && a.repo.toLowerCase() === b.repo.toLowerCase() && (a.kind === "pr" && b.kind === "pr" ? a.number === b.number : a.kind === "commit" && b.kind === "commit" && (a.sha.startsWith(b.sha) || b.sha.startsWith(a.sha)));
+
 /** A link as the pull request's number or the commit's short hash. */
 export function refLabel(ref: GitHubRef): string {
   return ref.kind === "pr" ? `#${ref.number}` : ref.sha.slice(0, 7);

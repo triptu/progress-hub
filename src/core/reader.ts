@@ -101,3 +101,33 @@ export const variant =
     const read: Value = { [key]: value[key], ...shape(kinds[value[key] as T[K]] as Fields<Value>)(value) };
     return Object.keys(value).every((name) => Object.hasOwn(read, name) || value[name] === undefined) ? (read as T) : unread();
   };
+
+/** A line of a JSON Lines file left out, by its number from 1, and why. */
+export interface Skipped {
+  readonly line: number;
+  readonly why: string;
+}
+
+/**
+ * The values a JSON Lines file holds, each with its line's number, and the lines that could not be read. A line a
+ * crash cut short is one of those. `noun` names what a line should be, for why one is left out.
+ */
+export function readJsonl<T>(file: string, read: Reader<T>, noun: string): { readonly values: T[]; readonly lines: number[]; readonly skipped: Skipped[] } {
+  const values: T[] = [];
+  const lines: number[] = [];
+  const skipped: Skipped[] = [];
+  file.split("\n").forEach((line, i) => {
+    if (line.trim() === "") return;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      return void skipped.push({ line: i + 1, why: "it is not JSON" });
+    }
+    const value = readOrNull(read, parsed);
+    if (value === null) return void skipped.push({ line: i + 1, why: `it is not ${noun} the hub reads` });
+    values.push(value);
+    lines.push(i + 1);
+  });
+  return { values, lines, skipped };
+}

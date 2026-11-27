@@ -12,6 +12,7 @@ declare const classes: {
   readonly refNum: string;
   readonly refState: string;
   readonly refTitle: string;
+  readonly resizer: string;
   readonly star: string;
   readonly try: string;
   readonly tryDot: string;

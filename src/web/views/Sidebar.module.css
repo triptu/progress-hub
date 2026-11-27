@@ -213,44 +213,7 @@ button.sideLabel:focus-visible {
   width: 35%;
 }
 
-.resizer {
-  grid-area: 1 / 1;
-  justify-self: end;
-  z-index: 5;
-  width: 9px;
-  margin-inline-end: -5px;
-  cursor: col-resize;
-  touch-action: none;
-}
-
-.resizer::after {
-  content: "";
-  display: block;
-  width: 1px;
-  height: 100%;
-  margin: 0 auto;
-  background: transparent;
-  transition: background var(--fast) var(--ease);
-}
-
-.resizer:hover::after,
-.resizer:active::after,
-.resizer:focus-visible::after {
-  width: 2px;
-  background: var(--line-strong);
-}
-
-.resizer:focus-visible {
-  outline: none;
-}
-
 /* The dot's ring is the colour of what it sits on. */
 .row[aria-current="page"] :global(.avatar-dot) {
   border-color: color-mix(in oklab, var(--ink) var(--sel-share), var(--side));
-}
-
-@media (max-width: 760px) {
-  .resizer {
-    display: none;
-  }
 }

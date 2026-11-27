@@ -352,3 +352,165 @@
     background: var(--side);
   }
 }
+
+/* A document, read as a page: a sheet as wide as a work's page reads, which scrolls with the stage around it. */
+.viewerDoc {
+  overflow: auto;
+  padding: var(--s8) var(--s16);
+}
+
+.doc {
+  max-width: var(--read);
+  margin: 0 auto;
+  padding: var(--s12) var(--s12) var(--s16);
+  border: 1px solid var(--line);
+  border-radius: var(--r-l);
+  background: var(--bg);
+}
+
+.doc h1 {
+  margin-bottom: var(--s4);
+  font: var(--t-title);
+  letter-spacing: var(--title-tracking);
+}
+
+.doc h2 {
+  margin-top: var(--s8);
+  font: var(--t-heading);
+}
+
+.doc h3,
+.doc h4 {
+  margin-top: var(--s6);
+  font: var(--t-body);
+  font-weight: var(--strong);
+}
+
+/* A data file or code reads wider than prose: as wide as a page. */
+.doc[data-format="table"],
+.doc[data-format="json"],
+.doc[data-format="text"] {
+  max-width: var(--page);
+  padding: var(--s6);
+}
+
+/* Text and data fill the sheet: no second frame inside it. */
+.doc:not([data-format="markdown"]) > pre {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+/* Code as typed: `->>` and `>=` stay three and two characters, not arrows. */
+.doc:global(.prose) code {
+  font-variant-ligatures: none;
+}
+
+.doc pre code [data-line="add"] {
+  color: var(--added);
+}
+
+.doc pre code [data-line="del"] {
+  color: var(--removed);
+}
+
+.doc pre code [data-line="hunk"],
+.doc pre code [data-line="file"] {
+  color: var(--muted);
+}
+
+/* A table wider than the sheet scrolls sideways on its own, and the text around it stays put. */
+.doc table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.doc hr {
+  margin: var(--s8) 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+/* A folder: its files as rows, each the height of a row anywhere in the hub. */
+.doc[data-format="folder"] {
+  padding: var(--s6) var(--s4);
+}
+
+.folderHead {
+  margin: 0 var(--s3) var(--s3);
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.folderFiles {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.folderFile {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 40px;
+  padding: 0 var(--s3);
+  border-radius: var(--r-m);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.folderFile:hover {
+  background: var(--hover);
+}
+
+.folderFile > svg {
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+
+.folderName {
+  overflow-wrap: anywhere;
+}
+
+/* A column of its own, so every row's time lines up whether or not it leaves the hub. */
+.folderOut {
+  display: flex;
+  width: 14px;
+  color: var(--muted);
+}
+
+.folderOut svg {
+  width: 14px;
+  height: 14px;
+}
+
+.folderWhen {
+  color: var(--muted);
+  font: var(--t-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.docFailed {
+  margin: auto;
+  color: var(--muted);
+}
+
+@media (max-width: 760px) {
+  /* The sheet takes the width. */
+  .viewerDoc {
+    padding: var(--s3);
+  }
+
+  .doc {
+    padding: var(--s6) var(--s4) var(--s8);
+  }
+
+  /* Here they would sit over the text. Back to the page, and another document is a tap away. */
+  .viewerStage:has(.viewerDoc) :global(.icon-btn) {
+    display: none;
+  }
+}

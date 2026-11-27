@@ -1,6 +1,6 @@
 import { Children, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
-import { ArrowSquareOutIcon, CaretRightIcon, FileHtmlIcon, GitCommitIcon, GlobeSimpleIcon, GitMergeIcon, GitPullRequestIcon, StarIcon, XCircleIcon } from "@phosphor-icons/react";
+import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from "react";
+import { ArrowSquareOutIcon, CaretRightIcon, FileHtmlIcon, GitCommitIcon, GlobeSimpleIcon, GitMergeIcon, GitPullRequestIcon, LinkSimpleIcon, StarIcon, XCircleIcon } from "@phosphor-icons/react";
 import type { Commit, Html, Instant, OpenLink, PullRequest, WorkId, WorkSummary } from "../../core/types.ts";
 import { sanitize } from "../lib/html.ts";
 import { projectLook } from "../lib/project.ts";
@@ -180,6 +180,22 @@ export function PrRow(props: { readonly pr: PullRequest; readonly plain?: boolea
 }
 
 /**
+ * A pull request as a chip of its own, opening on GitHub: its icon and number, and its state in a word where the icon
+ * doesn't say it. Before GitHub has said what it is, a link's icon and the number its address gives.
+ */
+export function PrChip(props: { readonly pr: PullRequest | null; readonly url: string; readonly className?: string }) {
+  const { pr } = props;
+  const number = pr?.number ?? /\/pull\/(\d+)/.exec(props.url)?.[1];
+  return (
+    <a className={`${s.chip} ${props.className ?? ""}`} href={pr?.url ?? props.url} target="_blank" rel="noopener noreferrer" title={pr ? `${pr.title} (${pr.state})` : props.url}>
+      {pr ? <PrIcon state={pr.state} /> : <LinkSimpleIcon className={s.refIcon} aria-hidden />}
+      <span className={s.chipNum}>{number ? `#${number}` : "Pull request"}</span>
+      {pr && SAID_STATES.includes(pr.state) ? <span className={s.chipState}>{pr.state}</span> : null}
+    </a>
+  );
+}
+
+/**
  * The pull requests and commits a line is about, one to a row under it: number and title, so several can
  * be told apart. `said` is the line when it is the pull request's own title, which the chip then leaves out.
  */
@@ -273,5 +289,55 @@ export function Fold(props: { readonly show: number; readonly noun: string; read
         </button>
       ) : null}
     </>
+  );
+}
+
+/** How far one press of an arrow key moves a panel's edge. */
+export const RESIZE_STEP = 16;
+
+/**
+ * The edge of a panel that sets its width: dragged, or moved with the arrow keys, and put back with a double click.
+ * `onReset` is that double click when the panel's own width is worked out rather than a number.
+ * `edge` is the side of the panel it stands on, `end` for one that opens from the left and `start` for one that opens from the right.
+ */
+export function Resizer(props: { readonly label: string; readonly edge: "start" | "end"; readonly className: string; readonly width: number; readonly min: number; readonly max: number; readonly initial: number; readonly onPreview: (width: number) => void; readonly onCommit: (width: number) => void; readonly onReset?: () => void }) {
+  const from = useRef<{ readonly x: number; readonly width: number } | null>(null);
+  const toward = props.edge === "end" ? 1 : -1;
+  const clamp = (width: number) => Math.round(Math.min(props.max, Math.max(props.min, width)));
+  const widthAt = (x: number) => (from.current ? clamp(from.current.width + toward * (x - from.current.x)) : props.width);
+  const end = (event: PointerEvent<HTMLDivElement>) => {
+    if (!from.current) return;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    props.onCommit(widthAt(event.clientX));
+    from.current = null;
+  };
+  const key = (event: KeyboardEvent<HTMLDivElement>) => {
+    const step = event.key === "ArrowLeft" ? -RESIZE_STEP : event.key === "ArrowRight" ? RESIZE_STEP : 0;
+    if (!step) return;
+    event.preventDefault();
+    props.onCommit(clamp(props.width + toward * step));
+  };
+  return (
+    <div
+      className={`${s.resizer} ${props.className}`}
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={props.label}
+      aria-valuenow={props.width}
+      aria-valuemin={props.min}
+      aria-valuemax={props.max}
+      tabIndex={0}
+      onPointerDown={(event) => {
+        if (event.button !== 0) return;
+        from.current = { x: event.clientX, width: props.width };
+        event.currentTarget.setPointerCapture(event.pointerId);
+        event.preventDefault();
+      }}
+      onPointerMove={(event) => (from.current ? props.onPreview(widthAt(event.clientX)) : undefined)}
+      onPointerUp={end}
+      onPointerCancel={end}
+      onDoubleClick={() => (props.onReset ? props.onReset() : props.onCommit(clamp(props.initial)))}
+      onKeyDown={key}
+    />
   );
 }

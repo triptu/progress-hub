@@ -93,7 +93,7 @@ Keep **Next** complete: everything the user asked for that is not started yet be
 
 **Try it.** When the user can open what the work is building, say where under a `## Try it` section, as Markdown links: `[Web app](http://localhost:5173)`, a preview deploy's address, or for an app with no server its HTML file, `[Demo](/path/to/dist/index.html)`. The hub shows each as a button on the work and on Home, says whether a server on this machine answers, and opens a file for the user. Keep the section current: change the port when it changes, and take a link out when its server is stopped for good. A `try:` line in the front matter works for one link.
 
-**Artifacts.** Link what the work made from the page: an HTML page, a video, a PDF or another document, as a normal link to a file in the work's folder, such as `[How it works](how-it-works.html)`. The hub lists them beside the page under Artifacts and on Media, named by the link's words.
+**Artifacts.** Link what the work made from the page: an HTML page, a video, a PDF or another document, as a normal link to a file in the work's folder, such as `[How it works](how-it-works.html)`. A link to a folder there, such as `[Queries](queries/)`, shows the files in it. The hub lists them beside the page under Artifacts and on Media, named by the link's words.
 
 ## What the hub adds, so don't write it
 
@@ -106,6 +106,47 @@ Keep **Next** complete: everything the user asked for that is not started yet be
 ## Who writes
 
 The thread that owns the work writes the page. Subagents report to that thread and don't edit the page. A second thread that joins the work (a scheduled sweep, a follow-up session) runs `progress join` first.
+
+## Outcomes
+
+When the goal names something you can count (faster, cheaper, fewer failures, more people kept), record the number. The hub shows a work's numbers on its Outcomes tab, and its north star on its card on Home. Readings go in `outcomes.jsonl` beside the page, one per line, written by `progress measure`. They are not page changes: they add nothing to the feed and do not move the work up Home.
+
+```
+progress measure "Failed tool calls" 3.51% --where prod --star --lower --target 2% \
+  --how "Production traces: failed ÷ all tool calls, full UTC days" \
+  --n "300,248 tool calls" --window "full UTC day" --source queries/failures.sql
+progress measure "Calendar bad arguments" 0.19% --from 3.08% --where prod --lower \
+  --change https://github.com/acme/app/pull/32
+progress measure "Desktop active in 14 days" 244 --of 1114 --by client=web --where prod
+```
+
+1. **Measure before the first change.** Record where the number stands, with `--star`, before you change anything. One outcome is the star: the one number this work moves. A later `--star` on another outcome moves it.
+2. **Say where.** Every value has `--where`: `prod`, `ci`, `local`, or `guess` for a number nobody measured. The hub never joins or compares numbers from two places, and never puts a guess in a headline.
+3. **Make it checkable.** Give a prod number its `--window` and its `--source`, the saved query or script that gives it again, and `--n`, how many were counted, with what they are once: `--n "300,248 tool calls"`. A `--source` holds for the readings after it until a new `--how`, so give it once. Times and the session are stamped for you.
+4. **The definition sticks.** The first reading fixes the unit. `--lower` or `--higher`, `--target` and `--how` hold until a line changes them. A reading in another unit is refused. A new `--how` starts a new definition, and the readings before it stay in its list but leave its chart.
+5. **Tie a number to its change.** `--change` names the pull request, commit or idea a reading is about, with `--from` for the value before. The hub works out better or worse from the numbers and the direction. You add only `--unclear`, when the difference is inside the noise, and `--dropped`, when the change was not kept.
+6. **Split, don't rename.** `--by client=web` records one segment. Each value of a label gets its own line on the chart. `--by day=part` marks a reading of part of a window, which is shown beside the line and never joined to full days. `--of` gives the whole, so 244 of 1,114 shows as counts and a rate. The first reading fixes whether an outcome is a rate, and a rate's `--target` and `--from` are in percent.
+7. **Say what is due.** `--due 2026-12-09` with no value records a reading expected later, such as a cohort that has not matured. `progress check` names it once it is late.
+8. **Record what you look after.** Besides the star, record what you are responsible for moving or keeping safe: inputs, guardrails, costs. `--group "Guardrails"` puts an outcome under a heading of that name. An outcome with no group is listed under Also measured. Keep one star.
+
+`progress check` prints the star and its latest reading, and names what is missing: a star with no `--how`, a prod reading with no window or source, a shipped pull request measured only locally, and a reading past its due date. A table of numbers on the page is still fine for anything else, such as a grid a team already keeps.
+
+## Key changes
+
+Some changes are ones every later change depends on, such as a new table, and they are easy to miss among many pull requests. The hub's Key changes tab shows them across every work, newest first, each with why and its pull request. Today that is database changes.
+
+When a pull request you open adds a migration or changes a database schema, record it with its migration files, from your checkout:
+
+```
+progress change db db/migrations/20261124_routine_waits.sql --pr https://github.com/acme/app/pull/412 \
+  --why "Each routine waits this long for an offline computer before it gives up"
+```
+
+1. **Run it when the pull request is opened,** and again when its migrations change. A second run for the same pull request replaces the first.
+2. **Give the migrations as written.** The hub keeps the SQL and reads from it what changed: tables, columns, indexes, constraints, triggers, policies, data changes and other objects. The command says what it read, so you see at once if it was read as meant. A file that is not SQL is kept and shown as written.
+3. **Say why in one line,** in words the user would use, not the migration's name. `--db "<name>"` says which database, when the project has more than one.
+
+Changes go in `changes.jsonl` beside the page, one per line. Like readings, they are not page changes.
 
 ## Markdown
 
@@ -127,6 +168,10 @@ progress path              the page this thread belongs to. Works from a subagen
 progress check [<work>]    what the hub reads from the page, anything to fix on it, and any ask
                            the user marked done in the hub.
 progress todo "<text>"     add to the user's own todos in the hub. Linked to this thread's work.
+progress measure "<outcome>" <value> --where prod|ci|local|guess
+                           record a reading of a number this work moves. See Outcomes.
+progress change db <migration file>... --pr <link> --why "<one line>"
+                           record a pull request's database change. See Key changes.
 ```
 
 ## Editing the page

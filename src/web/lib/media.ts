@@ -1,3 +1,4 @@
+import { mediaKind } from "../../core/kinds.ts";
 import type { Media, WorkSummary } from "../../core/types.ts";
 import { matches } from "./needs.ts";
 import { dayOf } from "./time.ts";
@@ -13,7 +14,7 @@ export interface MediaItem extends Media {
 export type MediaKind = Media["kind"];
 
 /** The kinds of media, in the order their filters stand. */
-const KINDS: readonly MediaKind[] = ["image", "video", "page", "file"];
+const KINDS: readonly MediaKind[] = ["image", "video", "page", "file", "folder"];
 
 /**
  * The kinds a list holds, and the list narrowed to the chosen ones. A choice counts only for a kind
@@ -35,6 +36,30 @@ export interface MediaDay {
 export function pictureSrc(item: Media): string {
   return `${item.src}?v=${Date.parse(item.at)}`;
 }
+
+/**
+ * How the hub shows a document: Markdown rendered, a table file as a table, JSON laid out, and any other file as
+ * text. Null for a file known not to be text, such as a PDF, a spreadsheet or an archive, which opens in a tab of its own.
+ */
+export type DocumentFormat = "markdown" | "table" | "json" | "text";
+
+export function documentFormat(src: string): DocumentFormat | null {
+  const ext = /\.([a-z0-9]+)$/i.exec(src.replace(/[?#].*$/, ""))?.[1]?.toLowerCase() ?? "";
+  if (ext === "md" || ext === "markdown") return "markdown";
+  if (ext === "csv" || ext === "tsv") return "table";
+  if (ext === "json") return "json";
+  return BINARY.has(ext) ? null : "text";
+}
+
+const BINARY = new Set(["pdf", "zip", "gz", "tgz", "tar", "7z", "rar", "xls", "xlsx", "doc", "docx", "ppt", "pptx", "key", "numbers", "pages", "exe", "dmg", "pkg", "msi", "app", "bin", "wasm", "db", "sqlite", "parquet", "mp3", "wav", "m4a", "ogg", "flac", "woff", "woff2", "ttf", "otf", "ico", "heic", "psd", "fig", "sketch"]);
+
+/** A folder's files as media of their own, each named by its path in the folder, so the viewer can show them. */
+export function folderItems(folder: MediaItem): readonly MediaItem[] {
+  return (folder.files ?? []).map((file) => ({ work: folder.work, kind: mediaKind(file.name) ?? "file", src: file.src, caption: "", at: file.at, workTitle: folder.workTitle, project: folder.project, label: file.name }));
+}
+
+/** Whether one of the media opens large in the hub. A document does when the hub can show it. */
+export const opensInHub = (item: Media) => item.kind !== "file" || documentFormat(item.src) !== null;
 
 export function fileName(src: string): string {
   const last = src.split("/").at(-1) ?? src;

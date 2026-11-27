@@ -2,11 +2,12 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { HubState, Todo, WorkDetail } from "../src/core/types.ts";
+import type { HubState, Instant, Todo, WorkDetail } from "../src/core/types.ts";
 import { MarkStore } from "../src/stores/marks.ts";
 import { TodoStore } from "../src/stores/todos.ts";
 import { serve } from "../src/server/serve.ts";
 import { t3Source } from "../src/t3/source.ts";
+import { OUTCOMES_BUDGET } from "../src/core/outcomes.ts";
 
 const root = mkdtempSync(join(tmpdir(), "progress-serve-"));
 const home = join(root, "home");
@@ -22,7 +23,7 @@ symlinkSync(join(outside, "secret.txt"), join(home, "alpha", "leak.txt"));
 symlinkSync(outside, join(home, "alpha", "out"));
 writeFileSync(
   join(home, "alpha", "progress.md"),
-  "---\ntitle: Alpha\n---\n\nWhere it **stands**. More detail\non the next line.\n\n## Needs you\n\n### Pick one\n\n![Option A](mock.html)\n![Demo](images/demo.mp4)\n![Shot](images/a.png)\n",
+  "---\ntitle: Alpha\n---\n\nWhere it **stands**. More detail\non the next line.\n\n## Needs you\n\n### Pick one\n\n![Option A](mock.html)\n![Demo](images/demo.mp4)\n![Shot](images/a.png)\n\nRead [the plan](plan.md), [the notes](/tmp/scratch/notes.md) and [the log](~/scratch/log.md).\n",
 );
 const old = new Date(Date.now() - 60_000);
 utimesSync(join(home, "alpha", "progress.md"), old, old);
@@ -54,6 +55,14 @@ test("a work's page points its files at /files, with videos as players, pages in
   // A picture loads from an address with the file's time on it; its link is the plain address.
   expect(html).toMatch(/<a class="fig" href="\/files\/alpha\/images\/a\.png" target="_blank" rel="noopener noreferrer"><img src="\/files\/alpha\/images\/a\.png\?v=\d+" alt="Shot" \/><span class="cap" aria-hidden="true">Shot<\/span><\/a>/);
   expect((await get("/api/work/nope")).status).toBe(404);
+});
+
+test("a link to a file outside the work's folder keeps its words and no address, since that path on the hub opens its Home", async () => {
+  const [item] = ((await (await get("/api/state")).json()) as HubState).needs.flatMap((need) => (need.source === "page" ? [need] : []));
+  const html = item?.html ?? "";
+  expect(html).toContain('<a href="/files/alpha/plan.md">the plan</a>');
+  expect(html).toContain(`<a title="Outside the work's folder, so the hub can't open it: /tmp/scratch/notes.md">the notes</a>`);
+  expect(html).toContain(`<a title="Outside the work's folder, so the hub can't open it: ~/scratch/log.md">the log</a>`);
 });
 
 test("/files serves the work's files and refuses dotfiles and symlinks that leave the home", async () => {
@@ -315,5 +324,158 @@ test("a work's places to try say whether they answer, and the hub opens a listed
   } finally {
     hub.stop();
     app.stop(true);
+  }
+});
+
+test("readings added to a work's outcomes.jsonl reach its page and its star, and never its feed or its time", async () => {
+  const own = join(root, "measured");
+  mkdirSync(join(own, "gamma"), { recursive: true });
+  writeFileSync(join(own, "gamma", "progress.md"), "---\ntitle: Gamma\n---\n\nWhere it stands.\n");
+  utimesSync(join(own, "gamma", "progress.md"), old, old);
+  const hub = serve({ home: own, port: 0, sources: [] });
+  try {
+    const read = async () => ({ state: (await (await fetch(`${hub.url}/api/state`)).json()) as HubState, detail: (await (await fetch(`${hub.url}/api/work/gamma`)).json()) as WorkDetail });
+    const before = await read();
+    expect(before.detail.outcomes).toBeUndefined();
+    expect(before.state.works[0]?.star).toBeUndefined();
+    expect(before.state.works[0]?.outcomes).toBeUndefined();
+
+    const response = await fetch(`${hub.url}/api/events`);
+    const reader = response.body?.getReader();
+    await reader?.read();
+    const line = (value: number, at: string, more: object = {}) => JSON.stringify({ at, outcome: "Failed tool calls", value, where: "prod", ...more });
+    writeFileSync(
+      join(own, "gamma", "outcomes.jsonl"),
+      [line(3.64, "2026-11-23T00:00:00Z", { set: { unit: "%", better: "lower", target: 2, star: true } }), line(2.96, "2026-11-25T00:00:00Z"), line(2.59, "2026-11-26T04:30:00Z", { labels: { day: "part" } }), '{"value": 1}', ""].join("\n"),
+    );
+    expect(new TextDecoder().decode((await reader?.read())?.value)).toBe("data: changed\n\n");
+    await reader?.cancel();
+
+    const after = await read();
+    expect(after.detail.outcomes?.map((outcome) => [outcome.name, outcome.star, outcome.readings.length])).toEqual([["Failed tool calls", true, 3]]);
+    expect(after.detail.notes).toContain("1 line of outcomes.jsonl was left out. progress check says why.");
+    // The card's line: the headline is the full days, never the part-day reading.
+    expect(after.state.works[0]?.star).toMatchObject({ outcome: "Failed tool calls", unit: "%", now: { value: 2.96, where: "prod", verdict: "better" }, values: [3.64, 2.96] });
+    expect(after.state.works[0]?.outcomes).toBe(1);
+    expect(after.state.works[0]?.lastChangeAt).toBe(before.state.works[0]!.lastChangeAt);
+    expect(after.state.feed).toEqual(before.state.feed);
+    expect(after.detail.feed).toEqual(before.detail.feed);
+  } finally {
+    hub.stop();
+  }
+});
+
+test("a work's card says where its star stands as its Outcomes does: unclear when the agent said so, and dated by its own reading", async () => {
+  const own = join(root, "standing");
+  mkdirSync(join(own, "delta"), { recursive: true });
+  writeFileSync(join(own, "delta", "progress.md"), "---\ntitle: Delta\n---\n\nWhere it stands.\n");
+  utimesSync(join(own, "delta", "progress.md"), old, old);
+  const line = (value: number, at: string, more: object = {}) => JSON.stringify({ at, outcome: "Latency", value, where: "prod", n: 500, ...more });
+  writeFileSync(
+    join(own, "delta", "outcomes.jsonl"),
+    [
+      line(100, "2026-11-23T00:00:00Z", { set: { unit: "ms", better: "lower", star: true } }),
+      line(90, "2026-11-24T00:00:00Z", { unclear: true }),
+      line(40, "2026-11-25T00:00:00Z", { where: "local" }),
+      line(70, "2026-11-25T06:00:00Z", { labels: { day: "part" } }),
+      "",
+    ].join("\n"),
+  );
+  const hub = serve({ home: own, port: 0, sources: [] });
+  try {
+    const state = (await (await fetch(`${hub.url}/api/state`)).json()) as HubState;
+    expect(state.works[0]?.star?.now).toEqual({ value: 90, of: null, where: "prod", at: "2026-11-24T00:00:00Z" as Instant, change: { by: -10, in: "percent" }, verdict: "unclear" });
+  } finally {
+    hub.stop();
+  }
+});
+
+/** The hub's answer for one work whose outcomes.jsonl holds these lines. */
+async function measured(name: string, lines: readonly object[]): Promise<{ state: HubState; detail: WorkDetail }> {
+  const own = join(root, name);
+  mkdirSync(join(own, "w"), { recursive: true });
+  writeFileSync(join(own, "w", "progress.md"), "---\ntitle: W\n---\n\nWhere it stands.\n");
+  utimesSync(join(own, "w", "progress.md"), old, old);
+  writeFileSync(join(own, "w", "outcomes.jsonl"), lines.map((line) => `${JSON.stringify(line)}\n`).join(""));
+  const hub = serve({ home: own, port: 0, sources: [] });
+  try {
+    const state = (await (await fetch(`${hub.url}/api/state`)).json()) as HubState;
+    return { state, detail: (await (await fetch(`${hub.url}/api/work/w`)).json()) as WorkDetail };
+  } finally {
+    hub.stop();
+  }
+}
+
+const hour = (n: number) => new Date(Date.UTC(2026, 0, 1) + n * 3_600_000).toISOString();
+
+test("a definition an outcome had before keeps its own unit", async () => {
+  const { detail } = await measured("redefined", [
+    { at: hour(0), outcome: "Load", value: 500, where: "prod", set: { unit: "ms", how: "old" } },
+    { at: hour(1), outcome: "Load", value: 0.4, where: "prod", set: { unit: "s", how: "new" } },
+  ]);
+  expect(detail.outcomes?.[0]?.unit).toBe("s");
+  expect(detail.outcomes?.[0]?.earlier.map((before) => [before.unit, before.readings.map((r) => r.value)])).toEqual([["ms", [500]]]);
+});
+
+test("a due reading is met only by a reading of the same labels and place, and a later date for it replaces the earlier", async () => {
+  const star = { at: hour(0), outcome: "Kept", set: { star: true } };
+  const due = (n: number, date: string) => ({ at: hour(n), outcome: "Kept", where: "prod", labels: { cohort: "a" }, due: date });
+  const local = { at: hour(2), outcome: "Kept", value: 3, where: "local", labels: { cohort: "a" } };
+  const dueOf = async (name: string, lines: object[]) => (await measured(name, [star, ...lines])).state.works[0]?.star?.due;
+  expect(await dueOf("due-local", [due(1, "2026-01-05"), local])).toBe("2026-01-05");
+  expect(await dueOf("due-moved", [due(1, "2026-01-05"), due(3, "2026-01-09")])).toBe("2026-01-09");
+  expect(await dueOf("due-met", [due(1, "2026-01-05"), { ...local, at: hour(4), where: "prod" }])).toBeNull();
+});
+
+test("labels that would read the same joined by & are two lines", async () => {
+  const r = (labels: Record<string, string>, value: number) => ({ at: hour(value), outcome: "Time", value, where: "ci", labels, set: { star: true } });
+  const { state } = await measured("labels", [r({ a: "x&b=y" }, 1), r({ a: "x", b: "y" }, 2)]);
+  expect(state.works[0]?.star?.split.map((entry) => entry.value)).toEqual([1, 2]);
+});
+
+test("a busy work's readings stay within what its page may carry, and each line keeps its first", async () => {
+  const lines = [];
+  for (let i = 0; i < 400; i++) for (let job = 0; job < 30; job++) lines.push({ at: hour(i), outcome: "Job time", value: i, where: "ci", labels: { job: `j${job}` }, note: "x".repeat(800) });
+  const [outcome] = (await measured("busy", lines)).detail.outcomes ?? [];
+  expect(new TextEncoder().encode(JSON.stringify(outcome)).length).toBeLessThan(OUTCOMES_BUDGET * 1.1);
+  for (let job = 0; job < 30; job++) expect(outcome?.readings.find((r) => r.labels?.job === `j${job}`)?.value).toBe(0);
+  expect(outcome?.readings.at(-1)?.at).toBe(hour(399) as Instant);
+});
+
+test("many outcomes with long text, written by hand, keep the page within the budget, and each outcome kept its first reading", async () => {
+  const lines = [];
+  for (let i = 0; i < 1000; i++) {
+    lines.push({ at: hour(0), outcome: `Outcome ${i}`, value: i, where: "ci", note: "é".repeat(7000), set: { how: "h".repeat(7000), group: "g".repeat(7000) } });
+    for (let j = 1; j < 4; j++) lines.push({ at: hour(j), outcome: `Outcome ${i}`, value: i + j, where: "ci", note: "é".repeat(7000), source: "s".repeat(7000) });
+  }
+  const { detail } = await measured("long", lines);
+  const outcomes = detail.outcomes ?? [];
+  expect(new TextEncoder().encode(JSON.stringify(outcomes)).length).toBeLessThanOrEqual(OUTCOMES_BUDGET);
+  expect(outcomes.length).toBeGreaterThan(10);
+  expect(outcomes.length).toBeLessThan(1000);
+  expect(outcomes.every((outcome, i) => outcome.name === `Outcome ${i}` && outcome.readings[0]?.value === i)).toBe(true);
+  expect(detail.notes.some((note) => note.includes("lines of outcomes.jsonl were left out"))).toBe(true);
+});
+
+test("works whose star is split by thousands of labels each send a card line of fifty labels and a count", async () => {
+  const own = join(root, "many-labels");
+  for (let w = 0; w < 8; w++) {
+    mkdirSync(join(own, `w${w}`), { recursive: true });
+    writeFileSync(join(own, `w${w}`, "progress.md"), `---\ntitle: W${w}\n---\n\nWhere it stands.\n`);
+    utimesSync(join(own, `w${w}`, "progress.md"), old, old);
+    const lines = Array.from({ length: 4000 }, (_, job) => JSON.stringify({ at: hour(job), outcome: "Job time", value: job, where: "ci", labels: { job: `job-${job}` }, ...(job === 0 ? { set: { star: true } } : {}) }));
+    writeFileSync(join(own, `w${w}`, "outcomes.jsonl"), `${lines.join("\n")}\n`);
+  }
+  const hub = serve({ home: own, port: 0, sources: [] });
+  try {
+    const state = (await (await fetch(`${hub.url}/api/state`)).json()) as HubState;
+    expect(state.works.length).toBe(8);
+    for (const work of state.works) {
+      expect(work.star?.split.map((entry) => entry.label)).toEqual(Array.from({ length: 50 }, (_, job) => `job-${job}`));
+      expect(work.star?.more).toBe(3950);
+    }
+    expect(JSON.stringify(state.works).length).toBeLessThan(60_000);
+  } finally {
+    hub.stop();
   }
 });

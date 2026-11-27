@@ -8,7 +8,7 @@ export interface Readable {
 }
 
 /**
- * The hub's reads: its state, one work's page, its media, and a file a work shows. Any server that holds `Stores`
+ * The hub's reads: its state, one work's page, its media, its key changes, and a file a work shows. Any server that holds `Stores`
  * answers them the same way through this. Null when the request is for none of them.
  */
 export async function read(req: Request, hub: Readable): Promise<Response | null> {
@@ -16,6 +16,7 @@ export async function read(req: Request, hub: Readable): Promise<Response | null
   const path = url.pathname;
   if (path === "/api/state") return Response.json(hub.state());
   if (path === "/api/media") return Response.json(await hub.stores.media());
+  if (path === "/api/changes") return Response.json(await hub.stores.changes());
   // A file a work shows. An address with the file's time on it names one version, which the browser may keep.
   if (path.startsWith("/files/")) return hub.stores.file(path.slice("/files/".length), url.searchParams.has("v"));
   const work = /^\/api\/work\/([^/]+)$/.exec(path)?.[1];

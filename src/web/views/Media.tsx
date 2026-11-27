@@ -1,14 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowRightIcon, ArrowSquareOutIcon, BrowserIcon, CaretLeftIcon, CaretRightIcon, FileTextIcon, FilmStripIcon, ImageIcon, PlayIcon, RowsIcon, SquaresFourIcon, XIcon } from "@phosphor-icons/react";
+import { ArrowRightIcon, ArrowSquareOutIcon, BrowserIcon, CaretLeftIcon, CaretRightIcon, FileTextIcon, FilmStripIcon, FolderIcon, ImageIcon, PlayIcon, RowsIcon, SquaresFourIcon, XIcon } from "@phosphor-icons/react";
 import type { Icon } from "@phosphor-icons/react";
-import type { WorkId } from "../../core/types.ts";
+import { MOST_FOLDER_FILES, type WorkId } from "../../core/types.ts";
 import type { MediaDay, MediaItem, MediaKind } from "../lib/media.ts";
-import { fileName, pictureSrc } from "../lib/media.ts";
+import { documentFormat, fileName, folderItems, opensInHub, pictureSrc } from "../lib/media.ts";
+import { documentHtml } from "../lib/document.ts";
 import { followLink, routeHref, useRoute } from "../lib/route.ts";
 import { usePersisted } from "../lib/persist.ts";
-import { Ago, Link, ListHead } from "./parts.tsx";
+import { Ago, Link, ListHead, When } from "./parts.tsx";
 import s from "./Media.module.css";
 
 interface MediaProps {
@@ -35,6 +36,7 @@ const KIND: Record<MediaKind, { readonly Icon: Icon; readonly label: string }> =
   video: { Icon: FilmStripIcon, label: "Videos" },
   page: { Icon: BrowserIcon, label: "Pages" },
   file: { Icon: FileTextIcon, label: "Documents" },
+  folder: { Icon: FolderIcon, label: "Folders" },
 };
 
 export function Media(props: MediaProps) {
@@ -84,10 +86,10 @@ export function Media(props: MediaProps) {
   );
 }
 
-/** Where one of the media opens: large over the tab it is on, or for a document, in a tab of its own. */
+/** Where one of the media opens: large over the tab it is on, or for a document the hub can't show, in a tab of its own. */
 function useOpen(scope: WorkId | null) {
   const { tab } = useRoute();
-  return (item: MediaItem) => (item.kind === "file" ? { href: item.src, target: "_blank", rel: "noopener noreferrer" } : { href: routeHref({ work: scope, tab, open: item.src }), onClick: followLink });
+  return (item: MediaItem) => (!opensInHub(item) ? { href: item.src, target: "_blank", rel: "noopener noreferrer" } : { href: routeHref({ work: scope, tab, open: item.src }), onClick: followLink });
 }
 
 /**
@@ -140,12 +142,19 @@ export function Tile(props: { readonly item: MediaItem; readonly scope: WorkId |
           // It shows once it has loaded: until then the frame is the tile's own ground, not a white flash.
           <iframe src={item.src} sandbox="allow-scripts" loading="lazy" tabIndex={-1} aria-hidden title="" onLoad={(event) => event.currentTarget.classList.add(s.in)} />
         ) : null}
+        {item.kind === "folder" ? (
+          <span className={s.tilePage}>
+            <FolderIcon aria-hidden />
+            <span>{fileName(item.src)}</span>
+            <span>{filesCount(item)}</span>
+          </span>
+        ) : null}
         {item.kind === "file" ? (
           <span className={s.tilePage}>
             <FileTextIcon aria-hidden />
             <span>{fileName(item.src)}</span>
-            {/* The one kind that leaves the hub: it opens in a tab of its own. */}
-            <ArrowSquareOutIcon className={s.tileOut} role="img" aria-label="Opens in a new tab" />
+            {/* What leaves the hub: it opens in a tab of its own. */}
+            {opensInHub(item) ? null : <ArrowSquareOutIcon className={s.tileOut} role="img" aria-label="Opens in a new tab" />}
           </span>
         ) : null}
       </span>
@@ -199,6 +208,11 @@ export function Viewer(props: { readonly item: MediaItem; readonly prev: MediaIt
             {item.workTitle} · <Ago verb="saved" at={item.at} now={props.now} />
           </p>
         </div>
+        {item.kind === "file" ? (
+          <a className="icon-btn" href={item.src} target="_blank" rel="noopener noreferrer" aria-label="Open the file" title="Open the file in a new tab">
+            <ArrowSquareOutIcon aria-hidden />
+          </a>
+        ) : null}
         <Link href={routeHref({ work: item.work, focus: item.src })} className="btn" aria-label="Show on page" title="Show on page">
           <span className={s.viewerWhere}>Show on page</span>
           <ArrowRightIcon aria-hidden />
@@ -207,6 +221,10 @@ export function Viewer(props: { readonly item: MediaItem; readonly prev: MediaIt
       <div className={s.viewerStage}>
         {item.kind === "image" ? (
           <Picture key={item.src} item={item} onClose={onClose} />
+        ) : item.kind === "file" ? (
+          <Document key={item.src} item={item} onClose={onClose} />
+        ) : item.kind === "folder" ? (
+          <Folder key={item.src} item={item} onClose={onClose} now={props.now} />
         ) : (
           <div className={s.viewerFit} onClick={(event) => (event.target === event.currentTarget ? onClose() : undefined)}>
             {item.kind === "video" ? <video key={item.src} src={item.src} controls autoPlay playsInline /> : null}
@@ -306,6 +324,70 @@ function Picture(props: { readonly item: MediaItem; readonly onClose: () => void
       />
     </div>
   );
+}
+
+/**
+ * A Markdown document, read as a page: one column on a sheet, which scrolls on its own. It is fetched once it opens,
+ * and the stage stays empty until it is in, so no raw text shows first.
+ */
+function Document(props: { readonly item: MediaItem; readonly onClose: () => void }) {
+  const format = documentFormat(props.item.src) ?? "text";
+  const [html, setHtml] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    fetch(pictureSrc(props.item))
+      .then((response) => (response.ok ? response.text() : Promise.reject(new Error(String(response.status)))))
+      // A file that is not text after all, such as a binary with no extension, is not shown as noise.
+      .then((text) => live && (text.includes("\u0000") ? setFailed(true) : setHtml(documentHtml(text, props.item.src, format))))
+      .catch(() => live && setFailed(true));
+    return () => {
+      live = false;
+    };
+  }, [props.item, format]);
+  return (
+    <div className={s.viewerDoc} onClick={(event) => (event.target === event.currentTarget ? props.onClose() : undefined)}>
+      {failed ? <p className={s.docFailed}>The hub can't show this file. Open it in a new tab from the top right.</p> : html === null ? null : <article className={`prose ${s.doc}`} data-format={format} dangerouslySetInnerHTML={{ __html: html }} />}
+    </div>
+  );
+}
+
+/** A folder's files as rows on a sheet, each opening as it would from the page: in the viewer, or in a tab of its own. */
+function Folder(props: { readonly item: MediaItem; readonly onClose: () => void; readonly now: number }) {
+  const route = useRoute();
+  const files = folderItems(props.item);
+  return (
+    <div className={s.viewerDoc} onClick={(event) => (event.target === event.currentTarget ? props.onClose() : undefined)}>
+      <article className={s.doc} data-format="folder">
+        <p className={s.folderHead}>{filesCount(props.item)}</p>
+        <ul className={s.folderFiles}>
+          {files.map((file) => {
+            const { Icon } = KIND[file.kind];
+            const here = opensInHub(file);
+            return (
+              <li key={file.src}>
+                <a
+                  className={s.folderFile}
+                  {...(here ? { href: routeHref({ work: route.work, tab: route.tab, card: route.card, open: file.src }), onClick: followLink } : { href: file.src, target: "_blank", rel: "noopener noreferrer" })}
+                >
+                  <Icon aria-hidden />
+                  <span className={s.folderName}>{file.label}</span>
+                  <span className={s.folderOut}>{here ? null : <ArrowSquareOutIcon role="img" aria-label="Opens in a new tab" />}</span>
+                  <When at={file.at} now={props.now} className={s.folderWhen} />
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      </article>
+    </div>
+  );
+}
+
+/** How many files a folder holds, as its list says it. */
+function filesCount(item: MediaItem): string {
+  const n = item.files?.length ?? 0;
+  return n >= MOST_FOLDER_FILES ? `The first ${n} files` : n === 1 ? "1 file" : `${n} files`;
 }
 
 function isTyping(event: KeyboardEvent): boolean {

@@ -6,13 +6,16 @@ import type { WorkId } from "../../core/types.ts";
 /** The id of the todos on a Home screen, which is where a link to them scrolls. */
 export const TODOS_ANCHOR = "todos";
 
-/** The tabs, in order. They are the same for everything and for one work, which only narrows what each shows. */
-export const TABS = ["main", "board", "activity", "media"] as const;
+/**
+ * The tabs, in order. The first four are the same for everything and for one work, which only narrows what each
+ * shows. Key changes shows once there are some, and Outcomes is a work's own, so the two come last and move no other tab.
+ */
+export const TABS = ["main", "board", "activity", "media", "changes", "outcomes"] as const;
 export type Tab = (typeof TABS)[number];
 
 /**
  * Where the user is: everything (`work` is null) or one work, and which tab of it.
- * Paths are `/`, `/board`, `/activity`, `/media`, and the same under `/w/<work>`.
+ * Paths are `/`, `/board`, `/activity`, `/media`, `/changes`, and the same under `/w/<work>`, which also has `/outcomes`.
  * `focus` is the `#` part: on a work's Home one of its media or a section, to scroll to.
  * `card` is the board's card shown in full, as `?card=<key>`, and `open` the media shown large over whatever is on screen, as `?open=<src>`.
  */
@@ -48,7 +51,7 @@ export function parseRoute(url: URL): Route {
   const moved = MOVED[tab];
   return {
     work: inWork ? named(decodeURIComponent(parts[1] ?? "")) : null,
-    tab: isTab(tab) ? tab : (moved?.tab ?? "main"),
+    tab: isTab(tab) && (inWork || tab !== "outcomes") ? tab : (moved?.tab ?? "main"),
     focus: url.hash ? decodeURIComponent(url.hash.slice(1)) : (moved?.focus ?? null),
     open: url.searchParams.get("open"),
     card: url.searchParams.get("card"),
@@ -60,7 +63,7 @@ const named = (name: string): WorkId => names.idOf.get(name) ?? (name as WorkId)
 
 export function routeHref(route: { readonly work: WorkId | null; readonly tab?: Tab; readonly focus?: string | null; readonly open?: string | null; readonly card?: string | null }): string {
   const base = route.work === null ? "" : `/w/${encodeURIComponent(names.nameOf.get(route.work) ?? route.work)}`;
-  const tab = route.tab && route.tab !== "main" ? `/${route.tab}` : "";
+  const tab = route.tab && route.tab !== "main" && (route.work !== null || route.tab !== "outcomes") ? `/${route.tab}` : "";
   const shown = [route.card ? `card=${encodeURIComponent(route.card)}` : "", route.open ? `open=${encodeURIComponent(route.open)}` : ""].filter(Boolean).join("&");
   const focus = route.focus ? `#${encodeURIComponent(route.focus)}` : "";
   return `${base}${tab || (base ? "" : "/")}${shown ? `?${shown}` : ""}${focus}`;

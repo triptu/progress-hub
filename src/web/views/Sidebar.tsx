@@ -1,5 +1,3 @@
-import { useRef } from "react";
-import type { KeyboardEvent, PointerEvent } from "react";
 import { CaretDownIcon, CaretRightIcon, HouseIcon } from "@phosphor-icons/react";
 import type { WorkId, WorkSummary } from "../../core/types.ts";
 import { routeHref, useRoute } from "../lib/route.ts";
@@ -124,49 +122,5 @@ function Row(props: { readonly work: WorkSummary; readonly on: boolean; readonly
         <When at={work.lastChangeAt} now={props.now} />
       </span>
     </Link>
-  );
-}
-
-/** The sidebar's right edge. Drag it, or use the arrow keys, to set the width; a double click puts it back. */
-export function Resizer(props: { readonly width: number; readonly min: number; readonly max: number; readonly initial: number; readonly onPreview: (width: number) => void; readonly onCommit: (width: number) => void }) {
-  const dragging = useRef(false);
-  const clamp = (width: number) => Math.round(Math.min(props.max, Math.max(props.min, width)));
-  const move = (event: PointerEvent<HTMLDivElement>) => {
-    if (dragging.current) props.onPreview(clamp(event.clientX));
-  };
-  const end = (event: PointerEvent<HTMLDivElement>) => {
-    if (!dragging.current) return;
-    dragging.current = false;
-    event.currentTarget.releasePointerCapture(event.pointerId);
-    props.onCommit(clamp(event.clientX));
-  };
-  const key = (event: KeyboardEvent<HTMLDivElement>) => {
-    const step = event.key === "ArrowLeft" ? -16 : event.key === "ArrowRight" ? 16 : 0;
-    if (!step) return;
-    event.preventDefault();
-    props.onCommit(clamp(props.width + step));
-  };
-  return (
-    <div
-      className={s.resizer}
-      role="separator"
-      aria-orientation="vertical"
-      aria-label="Sidebar width"
-      aria-valuenow={props.width}
-      aria-valuemin={props.min}
-      aria-valuemax={props.max}
-      tabIndex={0}
-      onPointerDown={(event) => {
-        if (event.button !== 0) return;
-        dragging.current = true;
-        event.currentTarget.setPointerCapture(event.pointerId);
-        event.preventDefault();
-      }}
-      onPointerMove={move}
-      onPointerUp={end}
-      onPointerCancel={end}
-      onDoubleClick={() => props.onCommit(props.initial)}
-      onKeyDown={key}
-    />
   );
 }

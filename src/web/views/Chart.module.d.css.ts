@@ -1,0 +1,34 @@
+// Written by scripts/css-types.ts from the module beside it. Run `bun run css-types` after changing its classes.
+declare const classes: {
+  readonly change: string;
+  readonly changeLabel: string;
+  readonly chart: string;
+  readonly counts: string;
+  readonly delta: string;
+  readonly dot: string;
+  readonly endLabel: string;
+  readonly grid: string;
+  readonly guide: string;
+  readonly key: string;
+  readonly keyBase: string;
+  readonly keyPin: string;
+  readonly legend: string;
+  readonly line: string;
+  readonly live: string;
+  readonly plot: string;
+  readonly row: string;
+  readonly rowChange: string;
+  readonly rowLabel: string;
+  readonly rowValue: string;
+  readonly rows: string;
+  readonly spark: string;
+  readonly stroke: string;
+  readonly svg: string;
+  readonly swatch: string;
+  readonly target: string;
+  readonly targetLabel: string;
+  readonly tick: string;
+  readonly tip: string;
+  readonly where: string;
+};
+export default classes;

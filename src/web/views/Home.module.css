@@ -116,6 +116,52 @@
   -webkit-line-clamp: 3;
 }
 
+/* The work's north star: one line under its goal that opens its Outcomes. */
+.cardStar {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  margin-top: var(--s2);
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.cardStar:hover .starName {
+  color: var(--link);
+}
+
+.starMark {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-top: 3px;
+  color: var(--star);
+}
+
+/* The words and the small line sit on one baseline, the line after the words. */
+.starText {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 6px;
+  min-width: 0;
+}
+
+.starText svg {
+  align-self: center;
+}
+
+.starText b {
+  color: var(--text);
+  font-weight: var(--strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.starName {
+  color: var(--text);
+}
+
 /* What the work waits on the user for, each a way to the ask itself: the sentence, with the hand that means it waits. */
 .cardAsks {
   display: grid;

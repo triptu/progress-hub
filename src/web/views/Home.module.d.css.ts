@@ -10,6 +10,7 @@ declare const classes: {
   readonly cardMain: string;
   readonly cardMeta: string;
   readonly cardOpen: string;
+  readonly cardStar: string;
   readonly cardSum: string;
   readonly cardTitle: string;
   readonly cardTop: string;
@@ -20,5 +21,8 @@ declare const classes: {
   readonly miniTitle: string;
   readonly miniWork: string;
   readonly settled: string;
+  readonly starMark: string;
+  readonly starName: string;
+  readonly starText: string;
 };
 export default classes;

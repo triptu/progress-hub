@@ -1,0 +1,422 @@
+/*
+ * A work's Outcomes. On a wide screen the star and the other numbers take the reading side and what changed them
+ * stands beside; on a narrow one they are one column, the changes after what waits on data.
+ */
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem);
+  grid-template-areas:
+    "star changes"
+    "waiting changes"
+    "measured changes";
+  grid-template-rows: auto auto 1fr;
+  column-gap: var(--s12);
+  align-items: start;
+}
+
+.star {
+  grid-area: star;
+  margin-bottom: var(--s12);
+}
+
+.waiting {
+  grid-area: waiting;
+  margin-bottom: var(--s12);
+}
+
+.changes {
+  grid-area: changes;
+  margin-bottom: var(--s12);
+}
+
+.measured {
+  grid-area: measured;
+}
+
+/* ---------------------------------------------------------------- The north star */
+
+.starName {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--text);
+  font: var(--t-heading);
+}
+
+.starName svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--star);
+}
+
+.starAbout {
+  margin-top: 2px;
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.figureRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s1) var(--s4);
+  margin-top: var(--s4);
+}
+
+.figure {
+  color: var(--text);
+  font: var(--t-figure);
+  letter-spacing: var(--title-tracking);
+  font-variant-numeric: tabular-nums;
+}
+
+.figureSide {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 4px;
+  color: var(--muted);
+}
+
+.sinceLooked {
+  color: var(--accent);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s2);
+  margin-top: var(--s2);
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+/* A reading of part of a window sits under the line, never on it. */
+.part {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s1) var(--s3);
+  margin-top: var(--s4);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-m);
+  background: var(--raise);
+  color: var(--muted);
+}
+
+.part b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.partLabel {
+  font: var(--t-small);
+}
+
+.how {
+  max-width: var(--read);
+  margin-top: var(--s4);
+  color: var(--muted);
+}
+
+.how b {
+  color: var(--text);
+}
+
+.how code {
+  font: var(--t-code);
+}
+
+.readings {
+  margin-top: var(--s2);
+}
+
+.readingList {
+  display: grid;
+  gap: var(--s2);
+  margin: var(--s1) 0 var(--s2);
+  padding-left: var(--mark);
+}
+
+.reading {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+  gap: var(--s2);
+  font: var(--t-small);
+}
+
+.reading[data-earlier] {
+  opacity: 0.7;
+}
+
+.readingWhen {
+  color: var(--muted);
+}
+
+.readingBody {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.readingTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s2);
+}
+
+.readingTop b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.readingMore {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s3);
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.readingMore code {
+  font: var(--t-code);
+}
+
+/* ---------------------------------------------------------------- Waiting on data */
+
+.waitList {
+  display: grid;
+  gap: var(--s3);
+  margin-top: var(--s3);
+}
+
+.wait {
+  display: grid;
+  grid-template-columns: var(--mark) minmax(0, 1fr);
+  align-items: start;
+}
+
+.wait > svg {
+  width: 14px;
+  height: 14px;
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+.wait[data-late] > svg,
+.wait[data-late] .waitTitle {
+  color: var(--needs);
+}
+
+.waitTitle {
+  display: block;
+  color: var(--text);
+}
+
+.waitNote {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s3);
+  margin-top: 2px;
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.waitPart {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ---------------------------------------------------------------- What changed it */
+
+.changeList {
+  display: grid;
+  margin-top: var(--s2);
+}
+
+.change {
+  padding-block: var(--s4);
+}
+
+.change + .change {
+  border-top: 1px solid var(--line);
+}
+
+.changeName {
+  color: var(--text);
+  font: var(--t-body);
+  font-weight: var(--medium);
+  overflow-wrap: anywhere;
+}
+
+.ref {
+  font: var(--t-code);
+}
+
+.change ul {
+  display: grid;
+  gap: var(--s2);
+  margin-top: var(--s2);
+}
+
+.changeRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: baseline;
+  gap: var(--s2);
+}
+
+/* A name wraps between words, never inside one. */
+.changeWhat {
+  min-width: 7rem;
+}
+
+.changeNums {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.changeDelta {
+  text-align: right;
+}
+
+.changeNote {
+  margin-top: var(--s2);
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.arrow {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--faint);
+}
+
+.dim {
+  color: var(--muted);
+}
+
+.dropped {
+  margin-top: var(--s2);
+}
+
+.dropped .changeList {
+  opacity: 0.85;
+}
+
+/* ---------------------------------------------------------------- The other numbers */
+
+.group + .group {
+  margin-top: var(--s12);
+}
+
+.rows {
+  display: grid;
+  margin-top: var(--s2);
+}
+
+.row[data-open] {
+  padding-bottom: var(--s4);
+}
+
+.rowHead {
+  grid-template-columns: minmax(0, 1fr) auto 64px;
+  gap: var(--s4);
+  min-height: var(--row-h);
+  padding-block: var(--s2);
+}
+
+.rowName {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+}
+
+.rowCaret {
+  width: 10px;
+  height: 10px;
+  color: var(--muted);
+}
+
+.rowHead[aria-expanded="true"] .rowCaret {
+  transform: rotate(90deg);
+}
+
+.rowSub {
+  display: block;
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.rowNums {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s1) var(--s2);
+  font-variant-numeric: tabular-nums;
+}
+
+.other {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: var(--s2);
+}
+
+.rowWhen {
+  min-width: 2.5rem;
+  color: var(--muted);
+  font: var(--t-small);
+  text-align: right;
+}
+
+.rowOpen {
+  padding-left: 20px;
+}
+
+@media (max-width: 1100px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "star" "waiting" "changes" "measured";
+    grid-template-rows: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .rowHead {
+    grid-template-columns: minmax(0, 1fr) 64px;
+    grid-template-areas: "name spark" "nums nums";
+    row-gap: var(--s1);
+  }
+
+  .rowName {
+    grid-area: name;
+  }
+
+  .rowNums {
+    grid-area: nums;
+    justify-content: flex-start;
+    padding-left: 20px;
+  }
+
+  .rowHead > svg,
+  .rowHead > span:last-child {
+    grid-area: spark;
+    justify-self: end;
+  }
+
+  .rowOpen {
+    padding-left: 0;
+  }
+}

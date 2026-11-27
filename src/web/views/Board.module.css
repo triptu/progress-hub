@@ -3,6 +3,18 @@
  * One kind of card in all of them. A card says which work it is from, what it is in full, and under that the
  * pull request it names and when it arrived.
  */
+/* The board, and beside it the open card when there is room for both. The board is measured on its own part, so its gutters give way to the card. */
+.dock {
+  display: flex;
+  height: 100%;
+}
+
+.dockMain {
+  flex: 1;
+  min-width: 0;
+  container-type: inline-size;
+}
+
 .board {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -383,9 +395,18 @@
 }
 
 /* The rings are drawn inside the card's edge: the lanes scroll, and would cut a ring that stood outside the first card. */
+/* The card shown in full is ringed in its lane's colour, and read in full even when viewed, so it is plain which card the panel is. */
 .card:has(.cardOpen[aria-current]) {
   background: var(--card-hover);
-  box-shadow: inset 0 0 0 2px var(--line-strong);
+  box-shadow: inset 0 0 0 2px var(--lane);
+}
+
+.card[data-quiet]:has(.cardOpen[aria-current]) .cardTitle {
+  color: var(--text);
+}
+
+.card[data-quiet]:has(.cardOpen[aria-current]) .cardShot {
+  opacity: 1;
 }
 
 .card:has(.cardOpen:focus-visible) {
@@ -629,6 +650,33 @@
   animation-name: slide;
   animation-duration: var(--sheet-in);
   animation-timing-function: var(--ease);
+}
+
+/* Beside the board it is a column of the screen: under the top bar, ruled off from the lanes, with nothing dimmed. */
+/* It is drawn on the cards' surface, as the open card made large. It does not slide in: the lanes make room for it at once, and the two move together. */
+.sheet[data-docked] {
+  position: relative;
+  flex: none;
+  width: var(--docked);
+  background: var(--card);
+  box-shadow: none;
+  border-inline-start: 1px solid var(--line);
+  animation: none;
+  /* A raised fill in it, such as code or a status, stands off the card's surface as it does off the page's. */
+  --raise: color-mix(in oklab, var(--card), var(--text) 6%);
+}
+
+/* Its close button stands under the top bar's last icon. */
+.sheet[data-docked] .sheetHead {
+  padding-inline-end: var(--s3);
+}
+
+/* Its edge, over the rule, is dragged to give the card or the lanes more room. */
+.sheetResizer {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: -5px;
+  z-index: 1;
 }
 
 .sheet[data-lane="needs"] {

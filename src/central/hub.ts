@@ -363,7 +363,10 @@ export class CentralHub {
     const row = JSON.stringify(next);
     if (byteSize(row) > MOST_ROW_BYTES) throw new Refused(413, "The state is larger than this hub keeps.");
 
-    const lackingPages = [...works].filter((work) => !bodies.has(work) && before?.pages[work] !== sent.pages[work]);
+    // A page kept by a hub of an earlier build lost its key changes, though its hash is the same: it is asked for once more.
+    const changed = new Set(sent.state.store.works.filter((work) => work.latestChange !== undefined).map((work) => work.id as string));
+    const lostChanges = (work: string) => changed.has(work) && !Object.hasOwn(parse<WorkDetail>(this.kv.get(`page:${machine}:${work}`)) ?? {}, "changes");
+    const lackingPages = [...works].filter((work) => !bodies.has(work) && (before?.pages[work] !== sent.pages[work] || lostChanges(work)));
     const known = new Set(Object.values(before?.files ?? {}).map((file) => file.digest));
     const sizes = new Map(sent.files.map((file) => [file.digest, file.size]));
     const lackingFiles = await this.absent(machine, [...sizes.keys()].filter((digest) => !known.has(digest)));

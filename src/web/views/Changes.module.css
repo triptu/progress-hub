@@ -1,0 +1,424 @@
+/*
+ * Key changes. Each change is a card: why, what it does in one line, where it is from, then a diff of each table,
+ * read like a code diff: a sign in the gutter and a tint for what was added, dropped or changed. Inside a card one
+ * gutter column holds every icon, sign and caret, and every name starts on one edge after it.
+ */
+.list {
+  max-width: var(--read);
+}
+
+.loading {
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+/* A card is as wide as the list, whatever its SQL holds. */
+.cards {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s4);
+  margin-top: var(--s4);
+}
+
+.card {
+  --pad: var(--s4);
+  padding: var(--pad);
+  border-radius: var(--r-l);
+  background: var(--card);
+  box-shadow: var(--card-edge);
+}
+
+.head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s1);
+}
+
+.why {
+  position: relative;
+  margin: 0;
+  color: var(--text);
+  font: var(--t-heading);
+}
+
+/* The dot stands in the card's padding, on the middle of the title's first line, so a new card's words start where an old one's do. */
+.fresh {
+  position: absolute;
+  top: calc(0.675em - 3px);
+  left: calc(-1 * (var(--pad) / 2 + 3px));
+}
+
+.headline {
+  margin: 0;
+  font: var(--t-small);
+  font-weight: var(--medium);
+}
+
+.headline [data-tone="dropped"] {
+  color: var(--removed);
+}
+
+.headline [data-tone="added"] {
+  color: var(--added);
+}
+
+.headline [data-tone="changed"] {
+  color: var(--changed);
+}
+
+/* A part wraps whole, never between its number and its words. */
+.part {
+  white-space: nowrap;
+}
+
+.dot {
+  color: var(--faint);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s4);
+  margin: var(--s1) 0 0;
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+.from {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  max-width: 100%;
+  color: var(--muted);
+}
+
+.from > span:last-child {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.from:hover {
+  color: var(--text);
+}
+
+.db {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+}
+
+.db svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* The pull request's chip, which rests on the card's own ground: a fill that shows on it, and a press apart from the hover. */
+.meta .pr {
+  background: var(--hover);
+}
+
+.meta .pr:hover {
+  background: var(--sel);
+}
+
+.meta .pr:active {
+  background: color-mix(in oklab, var(--ink) 14%, transparent);
+}
+
+.prAt {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s3);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- The diff */
+
+.diff {
+  display: grid;
+  gap: var(--s3);
+  margin-top: var(--s4);
+}
+
+.block {
+  overflow: hidden;
+  border-radius: var(--r-m);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+/* The head's icon stands in the gutter column the rows' signs stand in, and its name on the rows' names' edge. */
+.blockHead {
+  display: grid;
+  grid-template-columns: var(--mark) auto auto minmax(0, 1fr);
+  column-gap: var(--s3);
+  align-items: center;
+  margin: 0;
+  padding-block: var(--s2);
+  padding-inline-end: var(--s3);
+  background: var(--raise);
+  color: var(--text);
+  font: var(--t-small);
+}
+
+.blockHead > svg {
+  justify-self: center;
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+}
+
+.blockName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: var(--t-code);
+  font-weight: var(--medium);
+}
+
+.blockTitle {
+  color: var(--muted);
+}
+
+.blockMark {
+  grid-column: 4;
+  justify-self: end;
+  color: var(--muted);
+  text-align: end;
+}
+
+.block[data-mark="added"] > .blockHead {
+  background: color-mix(in oklab, var(--added) 10%, var(--raise));
+}
+
+.block[data-mark="added"] .blockMark,
+.block[data-mark="added"] > .blockHead > svg {
+  color: var(--added);
+}
+
+.block[data-mark="dropped"] > .blockHead,
+.block[data-mark="replaced"] > .blockHead {
+  background: color-mix(in oklab, var(--removed) 10%, var(--raise));
+}
+
+.block[data-mark="dropped"] .blockMark,
+.block[data-mark="dropped"] > .blockHead > svg,
+.block[data-mark="replaced"] .blockMark,
+.block[data-mark="replaced"] > .blockHead > svg {
+  color: var(--removed);
+}
+
+.block[data-mark="renamed"] .blockMark,
+.block[data-rebuilt] .blockMark {
+  color: var(--changed);
+}
+
+/* A rebuilt table's columns, which are its new shape: one quiet line, since what they were before is not known. */
+.kept {
+  margin: 0;
+  padding: var(--s2) var(--s3) var(--s2) calc(var(--mark) + var(--s3));
+  color: var(--muted);
+  font: var(--t-code);
+  overflow-wrap: anywhere;
+}
+
+/* A table's rows share their columns: the sign, the name as wide as the longest, then what is said about it. */
+.rows {
+  display: grid;
+  grid-template-columns: var(--mark) fit-content(16rem) minmax(0, 1fr);
+  column-gap: var(--s3);
+}
+
+.row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  padding-block: 3px;
+  padding-inline-end: var(--s3);
+  background: var(--tint, transparent);
+}
+
+.row[data-mark="added"] {
+  --tint: color-mix(in oklab, var(--added) 7%, transparent);
+  --sign: var(--added);
+}
+
+.row[data-mark="dropped"] {
+  --tint: color-mix(in oklab, var(--removed) var(--dropped-tint), transparent);
+  --sign: var(--removed);
+}
+
+.row[data-mark="changed"],
+.row[data-mark="renamed"],
+.row[data-mark="replaced"] {
+  --tint: color-mix(in oklab, var(--changed) 7%, transparent);
+  --sign: var(--changed);
+}
+
+.sign {
+  color: var(--sign, var(--faint));
+  font: var(--t-code);
+  font-weight: var(--strong);
+  text-align: center;
+}
+
+.name {
+  min-width: 0;
+  color: var(--text);
+  font: var(--t-code);
+  overflow-wrap: anywhere;
+}
+
+.row[data-mark="dropped"] .nameText {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in oklab, var(--removed) 60%, transparent);
+}
+
+.was,
+.arrow {
+  color: var(--muted);
+}
+
+/* What a row is, in a word, read beside the code: not set as code itself. */
+.word {
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+/* What is said about a row reads as one run of text, which wraps like a sentence, on the code's line height, so every row is as tall as its name. */
+.said {
+  min-width: 0;
+  font: var(--t-code);
+}
+
+.said > * {
+  line-height: inherit;
+}
+
+.said > * + * {
+  margin-inline-start: var(--s2);
+}
+
+/* Code here is read as written: `->>` stays three characters, not one drawn arrow. It is set after `font`, which resets it. */
+.detail {
+  min-width: 0;
+  color: var(--muted);
+  font: var(--t-code);
+  font-variant-ligatures: none;
+  overflow-wrap: anywhere;
+}
+
+.tags {
+  min-width: 0;
+  color: var(--muted);
+  font: var(--t-small);
+  overflow-wrap: anywhere;
+}
+
+.none {
+  margin-top: var(--s4);
+  color: var(--muted);
+  font: var(--t-small);
+}
+
+/* ---------------------------------------------------------------- The SQL as written */
+
+/* Its caret stands in the gutter column, and "SQL" on the names' edge. */
+.sqlFold {
+  margin-top: var(--s2);
+  margin-bottom: calc(-1 * var(--s2));
+}
+
+.sqlFold > summary {
+  display: grid;
+  grid-template-columns: var(--mark) minmax(0, 1fr);
+  column-gap: var(--s3);
+  align-items: start;
+}
+
+.sqlFold > summary > svg {
+  justify-self: center;
+  margin-top: 4px;
+}
+
+.files {
+  margin-inline-start: var(--s1);
+  font: var(--t-code);
+}
+
+.file {
+  margin: var(--s1) 0 var(--s3);
+}
+
+.file figcaption {
+  margin-bottom: var(--s1);
+  color: var(--muted);
+  font: var(--t-code);
+}
+
+/* As tall as the file, up to a long migration's worth; long lines wrap. */
+.sql {
+  max-height: 80rem;
+  margin: 0;
+  padding: var(--s3);
+  overflow: auto;
+  border-radius: var(--r-m);
+  background: var(--raise);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text);
+  font: var(--t-code);
+  font-variant-ligatures: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 2;
+}
+
+/*
+ * On a phone a row keeps its name and type on one line when they fit, and what is said about it wraps under the
+ * name, past the sign.
+ */
+@media (max-width: 760px) {
+  .card {
+    --pad: var(--s3);
+  }
+
+  .rows {
+    display: block;
+  }
+
+  .row {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: var(--s3);
+    padding-inline-start: calc(var(--mark) + var(--s3));
+  }
+
+  .sign {
+    position: absolute;
+    left: 0;
+    width: var(--mark);
+  }
+
+  /* The type stays beside the name; only what follows it wraps. */
+  .said {
+    display: contents;
+  }
+
+  .said > * + * {
+    margin-inline-start: 0;
+  }
+
+  /* The chip keeps its size; what a finger can press reaches past it. */
+  .meta .pr {
+    position: relative;
+  }
+
+  .meta .pr::after {
+    content: "";
+    position: absolute;
+    inset: -10px -6px;
+  }
+}

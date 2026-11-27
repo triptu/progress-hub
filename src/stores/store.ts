@@ -1,4 +1,5 @@
 import type { Health, HubState, Media, WorkDetail, WorkId } from "../core/types.ts";
+import type { WorkChange } from "../core/changes.ts";
 import { FROM, workNames } from "../core/names.ts";
 
 /**
@@ -101,6 +102,21 @@ export class Stores {
     if (direct) return direct;
     const id = workNames(this.state().works.map((work) => work.id)).idOf.get(name);
     return id === undefined ? null : this.detail(id);
+  }
+
+  /**
+   * Every work's key changes, newest first, from the pages of the works whose summary says they have some. A store
+   * needs nothing more for them: they travel on a work's page, as its outcomes do.
+   */
+  async changes(): Promise<WorkChange[]> {
+    const all: WorkChange[] = [];
+    // One page at a time: on the central hub each is a row read whole, and a page can hold megabytes of outcomes.
+    for (const work of this.state().works) {
+      if (work.latestChange === undefined) continue;
+      const changes = (await this.detail(work.id))?.changes ?? [];
+      for (const change of changes) all.push({ ...change, work: work.id, workTitle: work.title, project: work.project });
+    }
+    return newestFirst(all);
   }
 
   async media(): Promise<Media[]> {
